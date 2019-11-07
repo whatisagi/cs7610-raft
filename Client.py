@@ -1,5 +1,6 @@
 import json
 import threading
+import Messages
 
 class Client:
     leader = 0
@@ -11,6 +12,7 @@ class Client:
         return leader
 
     def put(self, key, value):
+        message = GetReply()
         # send put message to leader
         # if...
             # response times out

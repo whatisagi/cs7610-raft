@@ -1,3 +1,4 @@
+# server - server messages
 
 class ServerMessage:
     messageId = 0
