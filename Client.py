@@ -1,12 +1,12 @@
 import json
 
 class Client:
-    leader
+    leader = 0
 
     def f(self, int):
         return int + 75
     
-    def find_leader(self):
+    def find_leader(self):bb
         return leader
 
     def put(self, key, value):
