@@ -9,10 +9,9 @@ class Client:
         return int + 75
     
     def find_leader(self):
-        return leader
+        return self.leader
 
     def put(self, key, value):
-        message = GetReply()
         # send put message to leader
         # if...
             # response times out
