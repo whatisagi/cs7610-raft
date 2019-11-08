@@ -28,6 +28,7 @@ class RequestVoteReply(ServerMessage):
 #client-server messages
 
 class Get:
+    messageId = 0
     key = 0
 
 class Put(Get):
