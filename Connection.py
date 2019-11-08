@@ -24,6 +24,9 @@ class Connection:
     def print(self, a):
         print(a)
 
+    async def send_message():
+        pass
+
 class ServerConnection(Connection):
     __slots__ = ["_client_host_names"]
 
@@ -31,6 +34,9 @@ class ServerConnection(Connection):
         super().__init__(server_host_names)
         self._client_host_names = client_host_names
 
+    async def send_to_client():
+        pass
+    
 class ClientConnection(Connection):
     pass
 
