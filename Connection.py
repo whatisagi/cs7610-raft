@@ -1,9 +1,16 @@
 import asyncio
 import socket
 
+class network_config:
+    SERVER_PORT = 1111
+    CLIENT_PORT = 1112
+
 class Connection:
-    def __init__(self):
+    __slots__ = ["_socket", "_server_host_names"]
+
+    def __init__(self, server_host_names):
         self._socket = None
+        self._server_host_names = server_host_names
 
     def __enter__(self):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -15,6 +22,16 @@ class Connection:
     def print(self, a):
         print(a)
 
+class ServerConnection(Connection):
+    __slots__ = ["_client_host_names"]
+
+    def __init__(self, server_host_names, client_host_names):
+        super().__init__(server_host_names)
+        self._client_host_names = client_host_names
+
+class ClientConnection(Connection):
+    pass
+
 if __name__ == "__main__":
-    with Connection() as con:
+    with ServerConnection(["127.0.0.1"], ["127.0.0.2"]) as con:
         con.print("hello world")
