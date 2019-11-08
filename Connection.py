@@ -24,7 +24,7 @@ class Connection:
     def print(self, a):
         print(a)
 
-    async def send_message():
+    async def send_message(self):
         pass
 
 class ServerConnection(Connection):
@@ -34,9 +34,9 @@ class ServerConnection(Connection):
         super().__init__(server_host_names)
         self._client_host_names = client_host_names
 
-    async def send_to_client():
+    async def send_to_client(self):
         pass
-    
+
 class ClientConnection(Connection):
     pass
 
