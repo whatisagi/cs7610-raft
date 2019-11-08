@@ -1,9 +1,9 @@
-# server - server messages
-
-class ServerMessage:
+class Message:
     messageId = 0
 
-class AppendEntry(ServerMessage):
+# server - server messages
+
+class AppendEntry(Message):
     term = 0
     leaderId = 0 
     prevLogIndex = 0
@@ -11,35 +11,38 @@ class AppendEntry(ServerMessage):
     entry = 0
     leaderCommit = 0
 
-class RequestVote(ServerMessage):
+class RequestVote(Message):
     term = 0
     candidateId = 0
     lastLogIndex = 0
     lastLogTerm = 0
 
-class AppendEntryReply(ServerMessage):
+class AppendEntryReply(Message):
     term = 0
     success = True  
 
-class RequestVoteReply(ServerMessage):
+class RequestVoteReply(Message):
     term = 0
     voteGranted = True
 
 #client-server messages
 
-class Get:
-    messageId = 0
+class Get(Message):
     key = 0
 
-class Put(Get):
+class Put(Message):
+    key = 0
     value = 0
 
-class PutReply:
+class PutReply(Message):
     notleader = True
     leaderId = 0
     success = True
 
-class GetReply(PutReply):
+class GetReply(Message):
+    notleader = True
+    leaderId = 0
+    success = True
     value = 0
 
 
