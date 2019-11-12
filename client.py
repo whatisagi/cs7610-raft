@@ -66,7 +66,8 @@ class Client:
         print("I'm Client", self._id)
         msg = Test(self._id)
         while True:
-            await self._conn.send_message_to_server(msg, 1)
+            await asyncio.gather(*(self._conn.send_message_to_server(msg, id)
+                for id in range(len(Config.SERVER_NAMES))))
             print("sent")
             await asyncio.sleep(1)
             msg = await self._conn.receive_message_from_server()
