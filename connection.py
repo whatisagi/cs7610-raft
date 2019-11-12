@@ -32,22 +32,58 @@ class Resolver:
 class Connection:
     """
     ContextManager class for asynchronous connectless UDP "connection"
+    Inspired by aio_echo.py of bashkirtsevich:
+    (https://gist.github.com/bashkirtsevich/1659c18ac6d05d688426e5f150c9f6fc)
     """
-    __slots__ = ["_socket", "_resolver", "_host_addresses", "_port"]
+    __slots__ = ["_socket", "_resolver", "_host_addresses", "_port", "_loop", "_fd"]
 
     def __init__(self, host_names, port):
         self._socket = None
         self._resolver = Resolver(host_names)
         self._host_addresses = self._resolver.host_addresses
         self._port = port
+        self._loop = asyncio.get_event_loop()
+        self._fd = None
 
     def __enter__(self):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._socket.setblocking(False)
         self._socket.bind(("localhost", self._port))
+        self._fd = self._socket.fileno()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         self._socket.close()
+
+    # the following two functions will return future
+    def receive_data(self, fut=None, registed=False):
+        if fut is None:
+            fut = self._loop.create_future()
+        if registed:
+            self._loop.remove_reader(self._fd)
+        
+        try:
+            data, _ = self._socket.recvfrom(Config.BUF_SIZE)
+        except (BlockingIOError, InterruptedError):
+            self._loop.add_reader(self._fd, Connection.receive_data, self, fut, True)
+        else:
+            fut.set_result(data)
+        return fut
+
+    def send_data(self, data, id, fut=None, registed=False):
+        if fut is None:
+            fut = self._loop.create_future()
+        if registed:
+            self._loop.remove_writer(self._fd)
+        
+        try:
+            send_len = self._socket.sendto(data, self._host_addresses[id])
+        except (BlockingIOError, InterruptedError):
+            self._loop.add_writer(self._fd, Connection.send_data, self, data, id, fut, True)
+        else:
+            fut.set_result(send_len)
+        return fut
 
 class ClientConnection:
     """
@@ -69,6 +105,12 @@ class ClientConnection:
     
     def __exit__(self, exc_type, exc_value, traceback):
         self._client_to_server_conn.__exit__(exc_type, exc_value, traceback)
+    
+    def receive_data(self):
+        return self._client_to_server_conn.receive_data()
+
+    def send_data_to_server(self, data, server_id):
+        return self._client_to_server_conn.send_data(data, server_id)
 
 class ServerConnection:
     """
@@ -94,12 +136,23 @@ class ServerConnection:
         self._server_to_server_conn.__exit__(exc_type, exc_value, traceback)
         self._server_to_client_conn.__exit__(exc_type, exc_value, traceback)
 
+    def receive_data_from_server(self):
+        return self._server_to_server_conn.receive_data()
+
+    def receive_data_from_client(self):
+        return self._server_to_client_conn.receive_data()
+
+    def send_data_to_server(self, data, server_id):
+        return self._server_to_server_conn.send_data(data, server_id)
+    
+    def send_data_to_client(self, data, client_id):
+        return self._server_to_client_conn.send_data(data, client_id)
 
 if __name__ == "__main__":
     # test
     with Connection(Config.SERVER_NAMES, Config.SERVER_PORT) as conn:
-        conn.print("hello world")
+        pass
     with ServerConnection() as conn:
-        conn._server_to_server_conn.print("hello world")
+        pass
     with ClientConnection() as conn:
-        conn._client_to_server_conn.print("hello world")
+        pass

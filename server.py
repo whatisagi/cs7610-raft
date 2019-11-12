@@ -12,9 +12,28 @@ class Server:
         self._my_id = self._conn.server_id
         self._server_num = len(config.SERVER_NAMES)
 
+    async def server_handler(self):
+        if self._my_id == 0:
+            data = u"1".encode()
+            await self._conn.send_data_to_server(data, 1)
+        while True:
+            data = await self._conn.receive_data_from_server()
+            msg = data.decode()
+            print(msg)
+            msg2 = msg + u"1"
+            async for id in iter(range(self._server_num)):
+                if id != self._my_id:
+                    await self._conn.send_data_to_server(msg2.encode(), id)
+
+    async def client_handler(self):
+        while True:
+            await asyncio.sleep(5)
+            print('...')
+
     def run(self):
         with self._conn:
-            print(self._my_id, self._server_num)
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(asyncio.gather(self.server_handler, self.client_handler))
 
 if __name__ == "__main__":
     server = Server()
