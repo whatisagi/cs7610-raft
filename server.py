@@ -17,8 +17,8 @@ class Server:
         print(self._my_id)
         msg2 = str(self._my_id)
         while True:
-            await asyncio.gather([self._conn.send_data_to_server(msg2.encode(), id)
-                for id in iter(range(self._server_num)) if id != self._my_id])
+            await asyncio.gather(*(self._conn.send_data_to_server(msg2.encode(), id)
+                for id in range(self._server_num) if id != self._my_id))
             await asyncio.sleep(1)
             data = await self._conn.receive_data_from_server()
             msg = data.decode()
