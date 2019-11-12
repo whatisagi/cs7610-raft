@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-__all__ = ["AppendEntry", "RequestVote", "AppendEntryReply", "RequestVoteReply", "Get", "Put", "GetReply", "PutReply"]
+__all__ = ["Test", "AppendEntry", "RequestVote", "AppendEntryReply", "RequestVoteReply", "Get", "Put", "GetReply", "PutReply"]
 
 def messageId_generator_fun():
     id = 0
@@ -11,8 +11,17 @@ def messageId_generator_fun():
 messageId_generator = messageId_generator_fun()
 
 class Message:
+    __slots__ = ["messageId"]
     def __init__(self):
         self.messageId = next(messageId_generator)
+
+class Test(Message):
+    __slots__ = ["senderId"]
+    def __init__(self, senderId):
+        super().__init__()
+        self.senderId = senderId
+    def __str__(self):
+        return self.messageId + ' ' + self.senderId
 
 # server - server messages
 

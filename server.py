@@ -15,16 +15,15 @@ class Server:
         self._loop = asyncio.get_event_loop()
 
     async def server_handler(self):
-        print(self._my_id)
-        msg2 = str(self._my_id)
+        print("I'm Server", self._my_id)
+        msg = Test(self._my_id)
         while True:
-            await asyncio.gather(*(self._conn.send_data_to_server(msg2.encode(), id)
+            await asyncio.gather(*(self._conn.send_message_to_server(msg, id)
                 for id in range(self._server_num) if id != self._my_id))
             await asyncio.sleep(1)
-            data = await self._conn.receive_data_from_server()
-            msg = data.decode()
+            msg = await self._conn.receive_message_from_server()
             print(msg)
-            msg2 = msg + str(self._my_id)
+            msg = Test(self._my_id)
 
     async def client_handler(self):
         while True:

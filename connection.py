@@ -2,6 +2,7 @@
 
 import asyncio
 import socket
+import pickle
 
 from config import Config
 
@@ -110,10 +111,12 @@ class ClientConnection:
     def __exit__(self, exc_type, exc_value, traceback):
         self._client_to_server_conn.__exit__(exc_type, exc_value, traceback)
     
-    def receive_data(self):
-        return self._client_to_server_conn.receive_data()
+    async def receive_message(self):
+        data = await self._client_to_server_conn.receive_data()
+        return pickle.loads(data)
 
-    def send_data_to_server(self, data, server_id):
+    def send_message_to_server(self, msg, server_id):
+        data = pickle.dumps(msg)
         return self._client_to_server_conn.send_data(data, server_id)
 
 class ServerConnection:
@@ -140,16 +143,20 @@ class ServerConnection:
         self._server_to_server_conn.__exit__(exc_type, exc_value, traceback)
         self._server_to_client_conn.__exit__(exc_type, exc_value, traceback)
 
-    def receive_data_from_server(self):
-        return self._server_to_server_conn.receive_data()
+    async def receive_message_from_server(self):
+        data = await self._server_to_server_conn.receive_data()
+        return pickle.loads(data)
 
-    def receive_data_from_client(self):
-        return self._server_to_client_conn.receive_data()
+    async def receive_message_from_client(self):
+        data = await self._server_to_client_conn.receive_data()
+        return pickle.loads(data)
 
-    def send_data_to_server(self, data, server_id):
+    def send_message_to_server(self, msg, server_id):
+        data = pickle.dumps(msg)
         return self._server_to_server_conn.send_data(data, server_id)
     
-    def send_data_to_client(self, data, client_id):
+    def send_message_to_client(self, msg, client_id):
+        data = pickle.dumps(msg)
         return self._server_to_client_conn.send_data(data, client_id)
 
 if __name__ == "__main__":
