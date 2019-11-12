@@ -64,8 +64,8 @@ class Client:
 
     async def client_testing(self):
         print("I'm Client", self._id)
-        msg = Test(self._id)
         while True:
+            msg = Test(self._id)
             await asyncio.gather(*(self._conn.send_message_to_server(msg, id)
                 for id in range(len(Config.SERVER_NAMES))))
             print("sent")
