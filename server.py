@@ -33,7 +33,7 @@ class Server:
     def run(self):
         with self._conn:
             loop = asyncio.get_event_loop()
-            loop.run_until_complete(asyncio.gather(self.server_handler, self.client_handler))
+            loop.run_until_complete(asyncio.gather(Server.server_handler(self), Server.client_handler(self)))
 
 if __name__ == "__main__":
     server = Server()
