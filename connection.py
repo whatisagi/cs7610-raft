@@ -8,6 +8,9 @@ from config import Config
 __all__ = ["ServerConnection", "ClientConnection"]
 
 class Resolver:
+    """
+    For resolving host names to IP addresses, and getting my id
+    """
     __slots__ = ["_my_id", "_my_address", "_host_addresses"]
 
     def __init__(self, host_names):
@@ -27,6 +30,9 @@ class Resolver:
         return self._host_addresses
 
 class Connection:
+    """
+    ContextManager class for asynchronous connectless UDP "connection"
+    """
     __slots__ = ["_socket", "_resolver", "_host_addresses", "_port"]
 
     def __init__(self, host_names, port):
@@ -50,6 +56,9 @@ class Connection:
         pass
 
 class ClientConnection:
+    """
+    ContextManager class for connections used by Client
+    """
     __slots__ = ["_client_to_server_conn", "_client_resolver"]
 
     def __init__(self, config=Config):
@@ -68,6 +77,9 @@ class ClientConnection:
         self._client_to_server_conn.__exit__(exc_type, exc_value, traceback)
 
 class ServerConnection:
+    """
+    ContextManager class for connections used by Server
+    """
     __slots__ = ["_server_to_server_conn", "_server_to_client_conn", "_server_resolver"]
 
     def __init__(self, config=Config):
@@ -90,5 +102,10 @@ class ServerConnection:
 
 
 if __name__ == "__main__":
-    with Connection(Config.SERVER_NAMES, Config.SERVER_PORT) as con:
-        con.print("hello world")
+    # test
+    with Connection(Config.SERVER_NAMES, Config.SERVER_PORT) as conn:
+        conn.print("hello world")
+    with ServerConnection() as conn:
+        conn._server_to_server_conn.print("hello world")
+    with ClientConnection() as conn:
+        conn._client_to_server_conn.print("hello world")
