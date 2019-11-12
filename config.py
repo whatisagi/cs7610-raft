@@ -1,8 +1,8 @@
 __all__ = ["Config"]
 
 class Config:
-    SERVER_PORT = 1111
-    CLIENT_PORT = 1112
+    SERVER_PORT = 11110
+    CLIENT_PORT = 11120
     BUF_SIZE = 4096
     MAX_SERVER = 10
     MAX_CLIENT = 1

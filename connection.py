@@ -98,7 +98,6 @@ class ClientConnection:
 
     def __init__(self, config=Config):
         self._client_to_server_conn = Connection(config.SERVER_NAMES, config.CLIENT_PORT)
-        print(self._client_to_server_conn._host_addresses)
         self._client_resolver = Resolver(config.CLIENT_NAMES)
     
     @property
@@ -129,7 +128,6 @@ class ServerConnection:
     def __init__(self, config=Config):
         self._server_to_server_conn = Connection(config.SERVER_NAMES, config.SERVER_PORT)
         self._server_to_client_conn = Connection(config.CLIENT_NAMES, config.CLIENT_PORT)
-        print(self._server_to_client_conn._host_addresses)
         self._server_resolver = Resolver(config.SERVER_NAMES)
 
     @property
