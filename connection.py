@@ -78,7 +78,7 @@ class Connection:
             self._loop.remove_writer(self._fd)
         
         try:
-            send_len = self._socket.sendto(data, self._host_addresses[id])
+            send_len = self._socket.sendto(data, (self._host_addresses[id], self._port))
         except (BlockingIOError, InterruptedError):
             self._loop.add_writer(self._fd, Connection.send_data, self, data, id, fut, True)
         else:
