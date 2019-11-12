@@ -71,7 +71,7 @@ class Client:
             print("sent")
             await asyncio.sleep(1)
             msg = await self._conn.receive_message_from_server()
-            msg.handle()
+            msg.handle(self)
 
     def run(self):
         with self._conn:
