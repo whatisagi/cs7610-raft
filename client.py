@@ -65,7 +65,10 @@ class Client:
         msg = Test(0)
         while True:
             await self._conn.send_message_to_server(msg, 1)
+            print("sent")
             await asyncio.sleep(1)
+            msg = await self._conn.receive_message_from_server()
+            msg.handle()
 
     def run(self):
         with self._conn:
