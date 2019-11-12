@@ -29,6 +29,10 @@ class Resolver:
     def host_addresses(self):
         return self._host_addresses
 
+    @property
+    def my_address(self):
+        return self._my_address
+
 class Connection:
     """
     ContextManager class for asynchronous connectless UDP "connection"
@@ -49,7 +53,7 @@ class Connection:
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._socket.setblocking(False)
-        self._socket.bind(("localhost", self._port))
+        self._socket.bind((self._resolver.my_address, self._port))
         self._fd = self._socket.fileno()
         return self
 
