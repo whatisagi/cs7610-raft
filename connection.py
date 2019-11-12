@@ -49,12 +49,6 @@ class Connection:
     def __exit__(self, exc_type, exc_value, traceback):
         self._socket.close()
 
-    def print(self, a):
-        print(a)
-
-    async def send_message(self):
-        pass
-
 class ClientConnection:
     """
     ContextManager class for connections used by Client
