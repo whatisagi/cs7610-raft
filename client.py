@@ -17,6 +17,7 @@ class Client:
         self.recQ = queue.Queue()
         self._conn = ClientConnection()
         self._loop = asyncio.get_event_loop()
+        self._id = self._conn.client_id
     
     def find_leader(self):
         return self.leader
@@ -59,10 +60,11 @@ class Client:
         return None
 
     def test_handler(self, msg):
-        print(0, ':', msg)
+        print(self._id, ':', msg)
 
     async def client_testing(self):
-        msg = Test(0)
+        print("I'm Client", self._id)
+        msg = Test(self._id)
         while True:
             await self._conn.send_message_to_server(msg, 1)
             print("sent")
