@@ -19,10 +19,11 @@ class Server:
             for id in iter(range(self._server_num)):
                 if id != self._my_id:
                     await self._conn.send_data_to_server(msg2.encode(), id)
+            await asyncio.sleep(1)
             data = await self._conn.receive_data_from_server()
             msg = data.decode()
             print(msg)
-            msg2 = msg + u"1"
+            msg2 = msg + str(self._my_id)
 
     async def client_handler(self):
         while True:
