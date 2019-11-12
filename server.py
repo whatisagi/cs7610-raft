@@ -16,7 +16,7 @@ class Server:
         print(self._my_id)
         msg2 = str(self._my_id)
         while True:
-            async for id in iter(range(self._server_num)):
+            for id in iter(range(self._server_num)):
                 if id != self._my_id:
                     await self._conn.send_data_to_server(msg2.encode(), id)
             data = await self._conn.receive_data_from_server()
