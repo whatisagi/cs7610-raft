@@ -14,7 +14,7 @@ class Server:
         self._server_num = len(config.SERVER_NAMES)
         self._loop = asyncio.get_event_loop()
 
-    def test_handle(self, msg):
+    def test_handler(self, msg):
         print(self._id, ':', msg)
 
     async def server_handler(self):
