@@ -14,6 +14,9 @@ class Server:
         self._server_num = len(config.SERVER_NAMES)
         self._loop = asyncio.get_event_loop()
 
+    def test_handle(self, msg):
+        print(msg)
+
     async def server_handler(self):
         print("I'm Server", self._my_id)
         msg = Test(self._my_id)
@@ -22,7 +25,7 @@ class Server:
                 for id in range(self._server_num) if id != self._my_id))
             await asyncio.sleep(1)
             msg = await self._conn.receive_message_from_server()
-            print(msg)
+            msg.handle(self)
             msg = Test(self._my_id)
 
     async def client_handler(self):

@@ -22,6 +22,8 @@ class Test(Message):
         self.senderId = senderId
     def __str__(self):
         return str(self.messageId) + ' ' + str(self.senderId)
+    def handle(self, server):
+        server.test_handler(self)
 
 # server - server messages
 
@@ -94,15 +96,16 @@ class PutReply(Message):
 if __name__ == "__main__":
     import pickle
 
-    data = pickle.dumps(RequestVoteReply(0, True))
-    msg2 = RequestVoteReply(1, False)
+    data = pickle.dumps(Test(0))
+    msg2 = Test(1)
     data2 = pickle.dumps(msg2)
-    msg3 = RequestVoteReply(0, True)
+    msg3 = Test(2)
     data3 = pickle.dumps(msg3)
 
     msg1 = pickle.loads(data)
     msg2 = pickle.loads(data2)
     msg3 = pickle.loads(data3)
-    print(msg1.messageId, msg1.term, msg1.voteGranted)
-    print(msg2.messageId, msg2.term, msg2.voteGranted)
-    print(msg3.messageId, msg3.term, msg3.voteGranted)
+
+    print(msg1.messageId, msg1.senderId)
+    print(msg2.messageId, msg2.senderId)
+    print(msg3.messageId, msg3.senderId)
