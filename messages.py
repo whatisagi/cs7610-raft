@@ -21,7 +21,7 @@ class Test(Message):
         super().__init__()
         self.senderId = senderId
     def __str__(self):
-        return self.messageId + ' ' + self.senderId
+        return str(self.messageId) + ' ' + str(self.senderId)
 
 # server - server messages
 
