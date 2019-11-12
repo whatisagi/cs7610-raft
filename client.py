@@ -1,14 +1,22 @@
+#!/usr/bin/env python3
+
 import json
 import time
-import Messages
 import threading
-import Queue
+import queue
+import asyncio
+from config import Config
+from connection import ClientConnection
+from messages import *
 
 class Client:
-    leader = 0
-    msgId = 0
-    sendQ = Queue.Queue()
-    recQ = Queue.Queue()
+    def __init__(self):
+        self.leader = 0
+        self.msgId = 0
+        self.sendQ = queue.Queue()
+        self.recQ = queue.Queue()
+        self._conn = ClientConnection()
+        self._loop = asyncio.get_event_loop()
     
     def find_leader(self):
         return self.leader
@@ -50,3 +58,20 @@ class Client:
         # push message onto recQ
         return None
 
+    def test_handler(self, msg):
+        print(0, ':', msg)
+
+    async def client_testing(self):
+        msg = Test(0)
+        while True:
+            await self._conn.send_message_to_server(msg, 1)
+            await asyncio.sleep(1)
+
+    def run(self):
+        with self._conn:
+            self._loop.run_until_complete(Client.client_testing(self))
+
+
+if __name__ == "__main__":
+    client = Client()
+    client.run()
