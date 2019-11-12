@@ -17,25 +17,34 @@ class Server:
     def test_handler(self, msg):
         print(self._id, ':', msg)
 
+    def request_vote_handler(self, msg):
+        pass
+
+    def request_vote_reply_handler(self, msg):
+        pass
+
+    def append_entry_handler(self, msg):
+        pass
+
+    def append_entry_reply_handler(self, msg):
+        pass
+
+    def get_handler(self, msg):
+        pass
+
+    def put_handler(self, msg):
+        pass
+
     async def server_handler(self):
         print("I'm Server", self._id)
-        msg = Test(self._id)
         while True:
-            await asyncio.gather(*(self._conn.send_message_to_server(msg, id)
-                for id in range(self._server_num) if id != self._id))
-            await asyncio.sleep(1)
             msg = await self._conn.receive_message_from_server()
             msg.handle(self)
-            msg = Test(self._id)
 
     async def client_handler(self):
         while True:
             msg = await self._conn.receive_message_from_client()
-            print('....................')
             msg.handle(self)
-            print('....................')
-            msg = Test(self._id)
-            await self._conn.send_message_to_client(msg, 0)
 
     def run(self):
         with self._conn:

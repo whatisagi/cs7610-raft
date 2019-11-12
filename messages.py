@@ -37,6 +37,8 @@ class AppendEntry(Message):
         self.prevLogTerm = prevLogTerm
         self.entry = entry
         self.leaderCommit = leaderCommit
+    def handle(self, server):
+        server.append_entry_handler(self)
 
 class RequestVote(Message):
     __slots__ = ["term", "candidateId", "lastLogIndex", "lastLogTerm"]
@@ -46,6 +48,8 @@ class RequestVote(Message):
         self.candidateId = candidateId
         self.lastLogIndex = lastLogIndex
         self.lastLogTerm = lastLogTerm
+    def handle(self, server):
+        server.request_vote_handler(self)
 
 class AppendEntryReply(Message):
     __slots__ = ["term", "success"]
@@ -53,6 +57,8 @@ class AppendEntryReply(Message):
         super().__init__()
         self.term = term
         self.success = success
+    def handle(self, server):
+        server.append_entry_reply_handler(self)
 
 class RequestVoteReply(Message):
     __slots__ = ["term", "voteGranted"]
@@ -60,6 +66,8 @@ class RequestVoteReply(Message):
         super().__init__()
         self.term = term
         self.voteGranted = voteGranted
+    def handle(self, server):
+        server.request_vote_reply_handler(self)
 
 #client-server messages
 
@@ -68,6 +76,8 @@ class Get(Message):
     def __init__(self, key):
         super().__init__()
         self.key = key
+    def handle(self, server):
+        server.get_handler(self)
 
 class Put(Message):
     __slots__ = ["key", "value"]
@@ -75,6 +85,8 @@ class Put(Message):
         super().__init__()
         self.key = key
         self.value = value
+    def handle(self, server):
+        server.put_handler(self)
 
 class GetReply(Message):
     __slots__ = ["notleader", "leaderId", "success", "value"]
@@ -84,6 +96,8 @@ class GetReply(Message):
         self.leaderId = leaderId
         self.success = success
         self.value = value
+    def handle(self, client):
+        client.get_reply_handler(self)
 
 class PutReply(Message):
     __slots__ = ["notleader", "leaderId", "success"]
@@ -92,6 +106,8 @@ class PutReply(Message):
         self.notleader = notleader
         self.leaderId = leaderId
         self.success = success
+    def handle(self, client):
+        client.put_reply_handler(self)
 
 if __name__ == "__main__":
     import pickle

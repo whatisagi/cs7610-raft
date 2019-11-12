@@ -62,20 +62,21 @@ class Client:
     def test_handler(self, msg):
         print(self._id, ':', msg)
 
-    async def client_testing(self):
+    def get_reply_handler(self, msg):
+        pass
+
+    def put_reply_handler(self, msg):
+        pass
+
+    async def server_handler(self):
         print("I'm Client", self._id)
         while True:
-            msg = Test(self._id)
-            await asyncio.gather(*(self._conn.send_message_to_server(msg, id)
-                for id in range(len(Config.SERVER_NAMES))))
-            print("sent")
-            await asyncio.sleep(1)
             msg = await self._conn.receive_message_from_server()
             msg.handle(self)
 
     def run(self):
         with self._conn:
-            self._loop.run_until_complete(Client.client_testing(self))
+            self._loop.run_until_complete(Client.server_handler(self))
 
 
 if __name__ == "__main__":
