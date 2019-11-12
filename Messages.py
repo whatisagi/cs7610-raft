@@ -45,5 +45,3 @@ class GetReply(Message):
     success = True
     value = 0
 
-
-    
