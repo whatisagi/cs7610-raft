@@ -2,7 +2,8 @@
 
 import asyncio
 from config import Config
-from connection import ServerConnection, ClientConnection
+from connection import ServerConnection
+from messages import *
 
 class Server:
     __slots__ = ["_conn", "_my_id", "_server_num", "_loop"]
