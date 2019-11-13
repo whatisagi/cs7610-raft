@@ -48,7 +48,15 @@ class Server:
 
     def run(self):
         with self._conn:
-            self._loop.run_until_complete(asyncio.gather(Server.server_handler(self), Server.client_handler(self)))
+            try:
+                self._loop.create_task(Server.server_handler(self))
+                self._loop.create_task(Server.client_handler(self))
+                self._loop.run_forever()
+            except (KeyboardInterrupt, SystemExit):
+                print("Server", self._id, "crashes")
+            finally:
+                self._loop.stop()
+                self._loop.close()
 
 if __name__ == "__main__":
     server = Server()

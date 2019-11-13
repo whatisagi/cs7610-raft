@@ -53,8 +53,8 @@ class RequestVote(Message):
 
 class AppendEntryReply(Message):
     __slots__ = ["term", "success"]
-    def __init__(self, term, success):
-        super().__init__()
+    def __init__(self, messageId, term, success):
+        self.messageId = messageId
         self.term = term
         self.success = success
     def handle(self, server):
@@ -62,8 +62,8 @@ class AppendEntryReply(Message):
 
 class RequestVoteReply(Message):
     __slots__ = ["term", "voteGranted"]
-    def __init__(self, term, voteGranted):
-        super().__init__()
+    def __init__(self, messageId, term, voteGranted):
+        self.messageId = messageId
         self.term = term
         self.voteGranted = voteGranted
     def handle(self, server):
@@ -90,8 +90,8 @@ class Put(Message):
 
 class GetReply(Message):
     __slots__ = ["notleader", "leaderId", "success", "value"]
-    def __init__(self, notleader, leaderId, success, value):
-        super().__init__()
+    def __init__(self, messageId, notleader, leaderId, success, value):
+        self.messageId = messageId
         self.notleader = notleader
         self.leaderId = leaderId
         self.success = success
@@ -101,8 +101,8 @@ class GetReply(Message):
 
 class PutReply(Message):
     __slots__ = ["notleader", "leaderId", "success"]
-    def __init__(self, notleader, leaderId, success):
-        super().__init__()
+    def __init__(self, messageId, notleader, leaderId, success):
+        self.messageId = messageId
         self.notleader = notleader
         self.leaderId = leaderId
         self.success = success
