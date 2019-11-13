@@ -56,7 +56,6 @@ class Server:
             print()
             print("Server", self._id, "crashes")
         finally:
-            self._loop.stop()
             pending = [t for t in asyncio.Task.all_tasks()]
             for t in pending:
                 t.cancel()
