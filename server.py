@@ -46,7 +46,7 @@ class Server:
             msg = await self._conn.receive_message_from_client()
             msg.handle(self)
 
-    async def run(self):
+    def run(self):
         try:
             with self._conn:
                 self._loop.create_task(Server.server_handler(self))
@@ -57,11 +57,7 @@ class Server:
             print("Server", self._id, "crashes")
         finally:
             self._loop.stop()
-            pending = [t for t in asyncio.Task.all_tasks()]
-            [t.cancel() for t in pending]
-            await asyncio.gather(*pending, return_exceptions=True)
             self._loop.close()
-
 
 if __name__ == "__main__":
     server = Server()
