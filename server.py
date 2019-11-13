@@ -57,6 +57,9 @@ class Server:
             print("Server", self._id, "crashes")
         finally:
             self._loop.stop()
+            pending = [t for t in asyncio.Task.all_tasks()]
+            [t.cancel() for t in pending]
+            self._loop.run_until_complete(asyncio.gather(*pending))
             self._loop.close()
 
 if __name__ == "__main__":
