@@ -46,7 +46,7 @@ class Server:
             msg = await self._conn.receive_message_from_client()
             msg.handle(self)
 
-    def run(self):
+    async def run(self):
         try:
             with self._conn:
                 self._loop.create_task(Server.server_handler(self))
@@ -61,6 +61,7 @@ class Server:
             [t.cancel() for t in pending]
             await asyncio.gather(*pending, return_exceptions=True)
             self._loop.close()
+
 
 if __name__ == "__main__":
     server = Server()
