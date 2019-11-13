@@ -59,7 +59,10 @@ class Server:
             pending = [t for t in asyncio.Task.all_tasks()]
             for t in pending:
                 t.cancel()
-            self._loop.run_until_complete(asyncio.gather(*pending))
+                try:
+                    self._loop.run_until_complete(t)
+                except asyncio.CancelledError:
+                    pass
             self._loop.close()
 
 if __name__ == "__main__":
