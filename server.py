@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import asyncio
+from contextlib import suppress
+
 from config import Config
 from connection import ServerConnection
 from messages import *
@@ -59,10 +61,8 @@ class Server:
             pending = [t for t in asyncio.Task.all_tasks()]
             for t in pending:
                 t.cancel()
-                try:
+                with suppress(asyncio.CancelledError):
                     self._loop.run_until_complete(t)
-                except asyncio.CancelledError:
-                    pass
             self._loop.close()
 
 if __name__ == "__main__":
