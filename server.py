@@ -22,7 +22,7 @@ class Storage:
                 log = pickle.load(f)
         except OSError:
             currentTerm = 0
-            votedFor = None
+            votedFor = 0
             log = [{"term": 0}]
         return (currentTerm, votedFor, log)
 
@@ -68,7 +68,7 @@ class Server:
         voteGranted = False
         if msg.term >= self.currentTerm:
             if self.votedFor is None or self.votedFor == msg.candidateId:
-                if msg.lastLogTerm > self.log[-1]['term'] or ( msg.lastLogTerm == self.log[-1]['term'] and msg.lastLogIndex >= len(self.log)):
+                if msg.lastLogTerm > self.log[-1]['term'] or ( msg.lastLogTerm == self.log[-1]['term'] and msg.lastLogIndex >= len(self.log)-1):
                     voteGranted = True
                     self.currentTerm = msg.term
                     self.votedFor = msg.candidateId
@@ -114,15 +114,15 @@ class Server:
         self.exit_current_state()
         self.state = State.follower
         self.reset_election_timer()
-        print("Server {}: follower of term {} with leader {}".format(self._id, self.currentTerm, self.votedFor))
+        print("Server {}: follower of term {}".format(self._id, self.currentTerm))
 
-    async def msg_sender(self, msg, id, try_limit=Config.TRY_LIMIT):
+    async def msg_sender(self, msg, id, try_limit=Config.TRY_LIMIT, timeout=Config.RESEND_TIMEOUT):
         try:
             if try_limit < Config.TRY_LIMIT:
-                await asyncio.sleep(Config.RESEND_TIMEOUT)
+                await asyncio.sleep(timeout)
             await self._conn.send_message_to_server(msg, id)
-            if try_limit > 0:
-                self._msg_resend_timer[msg.messageId] = self._loop.create_task(self.msg_sender(msg, id, try_limit-1))
+            if try_limit != 0:
+                self._msg_resend_timer[msg.messageId] = self._loop.create_task(self.msg_sender(msg, id, try_limit-1, timeout))
         except asyncio.CancelledError:
             pass
 
@@ -132,7 +132,7 @@ class Server:
         self._voted_for_me = set()
         self.currentTerm += 1
         self.votedFor = self._id
-        self.reset_election_timer()
+        self.reset_election_timer(True)
         print("Server {}: starting election for term {}".format(self._id, self.currentTerm))
 
         for id in range(self._server_num):
@@ -148,17 +148,16 @@ class Server:
     async def election_timout(self):
         try:
             await asyncio.sleep(random.uniform(Config.ELECTION_TIMEOUT, 2 * Config.ELECTION_TIMEOUT))
-            self.enter_candidate_state()
+            await self.enter_candidate_state()
         except asyncio.CancelledError:
             pass
 
-    def reset_election_timer(self):
-        if self._election_timer is not None:
+    def reset_election_timer(self, timeouted=False):
+        if self._election_timer is not None and not timeouted:
             self._election_timer.cancel()
         self._election_timer = self._loop.create_task(self.election_timout())
 
     async def server_handler(self):
-        print("I'm Server", self._id)
         while True:
             msg = await self._conn.receive_message_from_server()
             # update term immediately
