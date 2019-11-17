@@ -1,40 +1,67 @@
 #!/usr/bin/env python3
 
 import asyncio
+import pickle
 from contextlib import suppress
 
 from config import Config
 from connection import ServerConnection
 from messages import *
 
-class Server:
-    __slots__ = ["_conn", "_id", "_server_num", "_loop"]
+class Storage:
+    __slots__ = ["_id"]
 
-    def __init__(self, config=Config):
+    def read(self, id):
+        self._id = id
+        try:
+            with open("server"+str(id)+".storage", "rb") as f:
+                currentTerm = pickle.load(f)
+                votedFor = pickle.load(f)
+                log = pickle.load(f)
+        except OSError:
+            currentTerm = 0
+            votedFor = None
+            log = []
+        return (currentTerm, votedFor, log)
+
+    def store(self, currentTerm, votedFor, log):
+        with open("server"+str(self._id)+".storage", "wb") as f:
+            pickle.dump(currentTerm, f)
+            pickle.dump(votedFor, f)
+            pickle.dump(log, f)
+
+class Server:
+    __slots__ = ["_conn", "_id", "_server_num", "_loop", "_storage", "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex"]
+
+    def __init__(self, config=Config, storage=Storage()):
         self._conn = ServerConnection(config)
         self._id = self._conn.server_id
         self._server_num = len(config.SERVER_NAMES)
         self._loop = asyncio.get_event_loop()
+        self._storage = storage
+        self.currentTerm, self.votedFor, self.log = self._storage.read(self._id)
+        self.commitIndex = 0
+        self.lastApplied = 0
 
-    def test_handler(self, msg):
+    async def test_handler(self, msg):
         print(self._id, ':', msg)
 
-    def request_vote_handler(self, msg):
+    async def request_vote_handler(self, msg):
         pass
 
-    def request_vote_reply_handler(self, msg):
+    async def request_vote_reply_handler(self, msg):
         pass
 
-    def append_entry_handler(self, msg):
+    async def append_entry_handler(self, msg):
         pass
 
-    def append_entry_reply_handler(self, msg):
+    async def append_entry_reply_handler(self, msg):
         pass
 
-    def get_handler(self, msg):
+    async def get_handler(self, msg):
         pass
 
-    def put_handler(self, msg):
+    async def put_handler(self, msg):
         pass
 
     async def server_handler(self):
@@ -44,6 +71,8 @@ class Server:
             msg.handle(self)
 
     async def client_handler(self):
+        msg = Test(self._id)
+        asyncio.gather(*(self._conn.send_message_to_server(msg, id) for id in range(self._server_num) if id != self._id))
         while True:
             msg = await self._conn.receive_message_from_client()
             msg.handle(self)
@@ -55,6 +84,7 @@ class Server:
                 self._loop.create_task(Server.client_handler(self))
                 self._loop.run_forever()
         except (KeyboardInterrupt, SystemExit):
+            self._storage.store(self.currentTerm, self.votedFor, self.log)
             print()
             print("Server", self._id, "crashes")
         finally:
