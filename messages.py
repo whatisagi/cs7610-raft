@@ -52,20 +52,22 @@ class RequestVote(Message):
         await server.request_vote_handler(self)
 
 class AppendEntryReply(Message):
-    __slots__ = ["term", "success"]
-    def __init__(self, messageId, term, success):
+    __slots__ = ["term", "success", "senderId"]
+    def __init__(self, messageId, term, success, senderId):
         self.messageId = messageId
         self.term = term
         self.success = success
+        self.senderId = senderId
     async def handle(self, server):
         await server.append_entry_reply_handler(self)
 
 class RequestVoteReply(Message):
-    __slots__ = ["term", "voteGranted"]
-    def __init__(self, messageId, term, voteGranted):
+    __slots__ = ["term", "voteGranted", "senderId"]
+    def __init__(self, messageId, term, voteGranted, senderId):
         self.messageId = messageId
         self.term = term
         self.voteGranted = voteGranted
+        self.senderId = senderId
     async def handle(self, server):
         await server.request_vote_reply_handler(self)
 
