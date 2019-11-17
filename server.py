@@ -2,6 +2,7 @@
 
 import asyncio
 import pickle
+import enum
 from contextlib import suppress
 
 from config import Config
@@ -20,8 +21,8 @@ class Storage:
                 log = pickle.load(f)
         except OSError:
             currentTerm = 0
-            votedFor = None
-            log = []
+            votedFor = 0
+            log = [{term: 0}]
         return (currentTerm, votedFor, log)
 
     def store(self, currentTerm, votedFor, log):
@@ -30,8 +31,13 @@ class Storage:
             pickle.dump(votedFor, f)
             pickle.dump(log, f)
 
+class State(enum.Enum):
+    follower = "Follower"
+    candidate = "Candidate"
+    leader = "Leader"
+
 class Server:
-    __slots__ = ["_conn", "_id", "_server_num", "_loop", "_storage", "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex"]
+    __slots__ = ["_conn", "_id", "_server_num", "_loop", "_storage", "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex", "state"]
 
     def __init__(self, config=Config, storage=Storage()):
         self._conn = ServerConnection(config)
@@ -42,15 +48,30 @@ class Server:
         self.currentTerm, self.votedFor, self.log = self._storage.read(self._id)
         self.commitIndex = 0
         self.lastApplied = 0
+        if self.currentTerm == 0 and self._id == 0:
+            self.state = State.leader
+        else:
+            self.enter_follower_state()
 
     async def test_handler(self, msg):
         print(self._id, ':', msg)
 
     async def request_vote_handler(self, msg):
-        pass
+        print("Received RequestVote from Server", msg.candidateId, "for term", msg.term, "with", msg.lastLogTerm, msg.lastLogIndex)
+        reply_msg = RequestVoteReply(msg.messageId, self.currentTerm, False)
+        if self.state == State.follower and msg.term >= self.currentTerm:
+            if self.votedFor is None or self.votedFor == msg.candidateId:
+                if msg.lastLogTerm > self.log[-1]['term'] or ( msg.lastLogTerm == self.log[-1]['term'] and msg.lastLogIndex >= len(self.log)):
+                    reply_msg = RequestVoteReply(msg.messageId, self.currentTerm, True)
+                    self.currentTerm = msg.term
+                    self.votedFor = msg.candidateId
+        await self._conn.send_message_to_server(reply_msg, msg.candidateId)
 
     async def request_vote_reply_handler(self, msg):
-        pass
+        #cancel the resender
+        
+        if msg.voteGranted:
+            pass
 
     async def append_entry_handler(self, msg):
         pass
@@ -64,15 +85,24 @@ class Server:
     async def put_handler(self, msg):
         pass
 
+    def enter_follower_state(self):
+        self.state = State.follower
+
+    def enter_candidate_state(self):
+        pass
+
     async def server_handler(self):
         print("I'm Server", self._id)
         while True:
             msg = await self._conn.receive_message_from_server()
+            self._storage.store(self.currentTerm, self.votedFor, self.log)
             await msg.handle(self)
+            if msg.term > self.currentTerm:
+                self.currentTerm = msg.term
+                self.votedFor = None
+                self.enter_follower_state()
 
     async def client_handler(self):
-        msg = Test(self._id)
-        asyncio.gather(*(self._conn.send_message_to_server(msg, id) for id in range(self._server_num) if id != self._id))
         while True:
             msg = await self._conn.receive_message_from_client()
             await msg.handle(self)
