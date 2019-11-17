@@ -68,14 +68,14 @@ class Server:
         print("I'm Server", self._id)
         while True:
             msg = await self._conn.receive_message_from_server()
-            msg.handle(self)
+            await msg.handle(self)
 
     async def client_handler(self):
         msg = Test(self._id)
         asyncio.gather(*(self._conn.send_message_to_server(msg, id) for id in range(self._server_num) if id != self._id))
         while True:
             msg = await self._conn.receive_message_from_client()
-            msg.handle(self)
+            await msg.handle(self)
 
     def run(self):
         try:

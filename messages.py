@@ -22,8 +22,8 @@ class Test(Message):
         self.senderId = senderId
     def __str__(self):
         return str(self.messageId) + ' ' + str(self.senderId)
-    def handle(self, server):
-        server.test_handler(self)
+    async def handle(self, server):
+        await server.test_handler(self)
 
 # server - server messages
 
@@ -37,8 +37,8 @@ class AppendEntry(Message):
         self.prevLogTerm = prevLogTerm
         self.entry = entry
         self.leaderCommit = leaderCommit
-    def handle(self, server):
-        server.append_entry_handler(self)
+    async def handle(self, server):
+        await server.append_entry_handler(self)
 
 class RequestVote(Message):
     __slots__ = ["term", "candidateId", "lastLogIndex", "lastLogTerm"]
@@ -48,8 +48,8 @@ class RequestVote(Message):
         self.candidateId = candidateId
         self.lastLogIndex = lastLogIndex
         self.lastLogTerm = lastLogTerm
-    def handle(self, server):
-        server.request_vote_handler(self)
+    async def handle(self, server):
+        await server.request_vote_handler(self)
 
 class AppendEntryReply(Message):
     __slots__ = ["term", "success"]
@@ -57,8 +57,8 @@ class AppendEntryReply(Message):
         self.messageId = messageId
         self.term = term
         self.success = success
-    def handle(self, server):
-        server.append_entry_reply_handler(self)
+    async def handle(self, server):
+        await server.append_entry_reply_handler(self)
 
 class RequestVoteReply(Message):
     __slots__ = ["term", "voteGranted"]
@@ -66,8 +66,8 @@ class RequestVoteReply(Message):
         self.messageId = messageId
         self.term = term
         self.voteGranted = voteGranted
-    def handle(self, server):
-        server.request_vote_reply_handler(self)
+    async def handle(self, server):
+        await server.request_vote_reply_handler(self)
 
 #client-server messages
 
@@ -76,8 +76,8 @@ class Get(Message):
     def __init__(self, key):
         super().__init__()
         self.key = key
-    def handle(self, server):
-        server.get_handler(self)
+    async def handle(self, server):
+        await server.get_handler(self)
 
 class Put(Message):
     __slots__ = ["key", "value"]
@@ -85,8 +85,8 @@ class Put(Message):
         super().__init__()
         self.key = key
         self.value = value
-    def handle(self, server):
-        server.put_handler(self)
+    async def handle(self, server):
+        await server.put_handler(self)
 
 class GetReply(Message):
     __slots__ = ["notleader", "leaderId", "success", "value"]
