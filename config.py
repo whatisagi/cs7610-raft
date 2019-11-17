@@ -8,7 +8,7 @@ class Config:
     MAX_CLIENT = 1
     TRY_LIMIT = 2
     RESEND_TIMEOUT = 0.4
-    ELECTION_TIMEOUT = 2.0
+    ELECTION_TIMEOUT = 4.0
 
     SERVER_NAMES = ["vdi-linux-031.ccs.neu.edu", "vdi-linux-032.ccs.neu.edu", "vdi-linux-033.ccs.neu.edu"]
     CLIENT_NAMES = ["vdi-linux-030.ccs.neu.edu"]
