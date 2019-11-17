@@ -9,6 +9,7 @@ class Config:
     TRY_LIMIT = 2
     RESEND_TIMEOUT = 0.4
     ELECTION_TIMEOUT = 10.0
+    HEARTBEAT_TIMEOUT = 1.0
 
     SERVER_NAMES = ["vdi-linux-031.ccs.neu.edu", "vdi-linux-032.ccs.neu.edu", "vdi-linux-033.ccs.neu.edu"]
     CLIENT_NAMES = ["vdi-linux-030.ccs.neu.edu"]

@@ -50,13 +50,15 @@ class Server:
         self._voted_for_me = set()
         self._msg_resend_timer = {}
         self._election_timer = None
+
+    async def init(self):
         self.currentTerm, self.votedFor, self.log = self._storage.read(self._id)
         self.commitIndex = 0
         self.lastApplied = 0
         self.nextIndex = [len(self.log) for i in range(self._server_num)]
         self.matchIndex = [0 for i in range(self._server_num)]
         if self.currentTerm == 0 and self._id == 0:
-            self.enter_leader_state()
+            await self.enter_leader_state()
         else:
             self.enter_follower_state()
 
@@ -64,7 +66,7 @@ class Server:
         print(self._id, ':', msg)
 
     async def request_vote_handler(self, msg):
-        print("Received RequestVote from Server", msg.candidateId, "for term", msg.term, "with", msg.lastLogTerm, msg.lastLogIndex)
+        print("Received RequestVote from Server {} for term {} with ({},{})".format(msg.candidateId, msg.term, msg.lastLogTerm, msg.lastLogIndex))
         voteGranted = False
         if msg.term >= self.currentTerm:
             if self.votedFor is None or self.votedFor == msg.candidateId:
@@ -81,18 +83,20 @@ class Server:
         if self.state == State.candidate and msg.messageId in self._msg_resend_timer:
             #cancel the resender
             self._msg_resend_timer[msg.messageId].cancel()
-            print("Received RequestVoteReply from Server", msg.senderId, "with", msg.voteGranted)
+            print("Received RequestVoteReply from Server {}, {} granted".format(msg.senderId, "" if msg.voteGranted else "not"))
             if msg.voteGranted:
                 self._voted_for_me.add(msg.senderId)
                 if len(self._voted_for_me) + 1 > self._server_num // 2:
-                    self.enter_leader_state()
+                    await self.enter_leader_state()
 
     async def append_entry_handler(self, msg):
         if self.state == State.candidate:
             self.votedFor = msg.leaderId
             self.enter_follower_state()
         if self.state != State.leader:
-            pass
+            if msg.entry is None: #heartbeat
+                self.reset_election_timer()
+                print("Received heartbeat from Server {}".format(msg.leaderId))
 
     async def append_entry_reply_handler(self, msg):
         pass
@@ -116,13 +120,13 @@ class Server:
         self.reset_election_timer()
         print("Server {}: follower of term {}".format(self._id, self.currentTerm))
 
-    async def msg_sender(self, msg, id, try_limit=Config.TRY_LIMIT, timeout=Config.RESEND_TIMEOUT):
+    async def msg_sender(self, msg, id, count=0, timeout=Config.RESEND_TIMEOUT, try_limit=Config.TRY_LIMIT):
         try:
-            if try_limit < Config.TRY_LIMIT:
+            if count > 0:
                 await asyncio.sleep(timeout)
             await self._conn.send_message_to_server(msg, id)
-            if try_limit != 0:
-                self._msg_resend_timer[msg.messageId] = self._loop.create_task(self.msg_sender(msg, id, try_limit-1, timeout))
+            if count != try_limit: # ulimited retry if try_limit == -1
+                self._msg_resend_timer[msg.messageId] = self._loop.create_task(self.msg_sender(msg, id, count+1, timeout, try_limit))
         except asyncio.CancelledError:
             pass
 
@@ -140,21 +144,33 @@ class Server:
                 msg = RequestVote(self.currentTerm, self._id, len(self.log)-1, self.log[-1]["term"])
                 await self.msg_sender(msg, id)
 
-    def enter_leader_state(self):
+    async def enter_leader_state(self):
         self.exit_current_state()
         self.state = State.leader
+        self.cancel_election_timer()
+        self.nextIndex = [len(self.log) for i in range(self._server_num)]
+        self.matchIndex = [0 for i in range(self._server_num)]
         print("Server {}: leader of term {}".format(self._id, self.currentTerm))
+
+        for id in range(self._server_num):
+            if id != self._id:
+                msg = AppendEntry(self.currentTerm, self._id, 0, 0, None, 0) #heartbeat
+                await self.msg_sender(msg, id, timeout=Config.HEARTBEAT_TIMEOUT, try_limit=-1)
 
     async def election_timout(self):
         try:
-            await asyncio.sleep(random.uniform(Config.ELECTION_TIMEOUT, 2 * Config.ELECTION_TIMEOUT))
+            timeout = random.uniform(Config.ELECTION_TIMEOUT, 2 * Config.ELECTION_TIMEOUT)
+            await asyncio.sleep(timeout)
             await self.enter_candidate_state()
         except asyncio.CancelledError:
             pass
 
-    def reset_election_timer(self, timeouted=False):
+    def cancel_election_timer(self, timeouted=False):
         if self._election_timer is not None and not timeouted:
             self._election_timer.cancel()
+
+    def reset_election_timer(self, timeouted=False):
+        self.cancel_election_timer(timeouted)
         self._election_timer = self._loop.create_task(self.election_timout())
 
     async def server_handler(self):
@@ -175,6 +191,7 @@ class Server:
     def run(self):
         try:
             with self._conn:
+                self._loop.create_task(Server.init(self))
                 self._loop.create_task(Server.server_handler(self))
                 self._loop.create_task(Server.client_handler(self))
                 self._loop.run_forever()
