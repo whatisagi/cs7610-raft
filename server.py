@@ -9,6 +9,7 @@ from contextlib import suppress
 from config import Config
 from connection import ServerConnection
 from messages import *
+from log import *
 
 class Storage:
     __slots__ = ["_id"]
@@ -23,7 +24,7 @@ class Storage:
         except OSError:
             currentTerm = 0
             votedFor = 0
-            log = [{"term": 0}]
+            log = [NoOp(0)]
         return (currentTerm, votedFor, log)
 
     def store(self, currentTerm, votedFor, log):
@@ -39,7 +40,7 @@ class State(enum.Enum):
 
 class Server:
     __slots__ = ["_conn", "_id", "_server_num", "_loop", "_storage", "_voted_for_me", "_msg_resend_timer", "_election_timer",
-        "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex", "state"]
+        "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex", "state", "stateMachine"]
 
     def __init__(self, config=Config, storage=Storage()):
         self._conn = ServerConnection(config)
@@ -57,6 +58,7 @@ class Server:
         self.lastApplied = 0
         self.nextIndex = [len(self.log) for i in range(self._server_num)]
         self.matchIndex = [0 for i in range(self._server_num)]
+        self.stateMachine = {}
         if self.currentTerm == 0 and self._id == 0:
             await self.enter_leader_state()
         else:
@@ -121,6 +123,11 @@ class Server:
         print("Server {}: follower of term {}".format(self._id, self.currentTerm))
 
     async def msg_sender(self, msg, id, count=0, timeout=Config.RESEND_TIMEOUT, try_limit=Config.TRY_LIMIT):
+        """
+        Usage:
+        - count = 0, try_limit = -1: sending indefinitely, no wait before the first one
+        - count >-0, try_limit = -1: sending indefinitely, wait before the first one
+        """
         try:
             if count > 0:
                 await asyncio.sleep(timeout)
@@ -191,9 +198,9 @@ class Server:
     def run(self):
         try:
             with self._conn:
-                self._loop.create_task(Server.init(self))
-                self._loop.create_task(Server.server_handler(self))
-                self._loop.create_task(Server.client_handler(self))
+                self._loop.create_task(self.init())
+                self._loop.create_task(self.server_handler())
+                self._loop.create_task(self.client_handler())
                 self._loop.run_forever()
         except (KeyboardInterrupt, SystemExit):
             #self._storage.store(self.currentTerm, self.votedFor, self.log)
