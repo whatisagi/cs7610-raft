@@ -8,17 +8,19 @@ from contextlib import suppress
 
 from config import Config
 from connection import ServerConnection
-from messages import *
-from log import *
+from messages import Test, AppendEntry, RequestVote, AppendEntryReply, RequestVoteReply, Get, Put, GetReply, PutReply
+from log import GetOp, PutOp, NoOp
+
+__all__ = ["Server"]
 
 class Storage:
     __slots__ = ["_id"]
 
-    def read(self, id):
+    def read(self, id: int):
         self._id = id
         try:
             with open("server"+str(id)+".storage", "rb") as f:
-                currentTerm = pickle.load(f)
+                currentTerm: int = pickle.load(f)
                 votedFor = pickle.load(f)
                 log = pickle.load(f)
         except OSError:
