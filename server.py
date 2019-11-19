@@ -79,6 +79,7 @@ class Server:
     async def message_sender(self, msg, id, resend=True):
         await self._conn.send_message_to_server(msg, id)
         if resend:
+            print("Resender to {} for {}".format(id, msg))
             self._message_resend_timer[msg.messageId] = self._loop.create_task(self.message_resender(msg, id))
 
     # methods for sending heartbeats
@@ -257,8 +258,8 @@ class Server:
         self.log.append(NoOp(self.currentTerm))
         for id in range(self._server_num):
             if id != self._id and self.nextIndex[id] <= len(self.log)-1:
-                next_msg = AppendEntry(self.currentTerm, self._id, self.nextIndex[id]-1, self.log[self.nextIndex[id]-1].term, self.log[self.nextIndex[id]], self.commitIndex)
-                await self.message_sender(next_msg, id)
+                msg = AppendEntry(self.currentTerm, self._id, self.nextIndex[id]-1, self.log[self.nextIndex[id]-1].term, self.log[self.nextIndex[id]], self.commitIndex)
+                await self.message_sender(msg, id)
 
     # methods for managing election timer
     async def election_timout(self):
