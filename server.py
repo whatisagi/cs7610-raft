@@ -39,7 +39,7 @@ class State(enum.Enum):
     leader = "Leader"
 
 class Server:
-    __slots__ = ["_conn", "_id", "_server_num", "_loop", "_storage", "_voted_for_me", "_message_resend_timer", "_election_timer", "_heartbeat_timer",
+    __slots__ = ["_conn", "_id", "_server_num", "_loop", "_storage", "_voted_for_me", "_message_resend_timer", "_election_timer", "_heartbeat_timer", "_apply_notifier",
         "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex", "state", "stateMachine"]
 
     # methods for initialization
@@ -53,6 +53,7 @@ class Server:
         self._message_resend_timer = {}
         self._election_timer = None
         self._heartbeat_timer = []
+        self._apply_notifier = {}
 
     async def init(self):
         self.currentTerm, self.votedFor, self.log = self._storage.read(self._id)
@@ -65,7 +66,7 @@ class Server:
             self.log = [NoOp(0), GetOp(0, 'x'), PutOp(0, 'x', 4), GetOp(0, 'x'), PutOp(0, 'y', 3), PutOp(0, 'x', 5), GetOp(0, 'x')]
             await self.enter_leader_state()
         else:
-            self.enter_follower_state()
+            await self.enter_follower_state()
 
     # methods for sending and resending messages
     async def message_resender(self, msg, id, timeout=Config.RESEND_TIMEOUT, try_limit=Config.TRY_LIMIT): #TO BE DETERMINED: Indefinitely retry or not?
@@ -129,7 +130,7 @@ class Server:
         if msg.term >= self.currentTerm:
             if self.state == State.candidate:
                 self.votedFor = msg.leaderId
-                self.enter_follower_state()
+                await self.enter_follower_state()
             # dealing with heartbeat
             if msg.entry is None:
                 self.reset_election_timer()
@@ -186,17 +187,44 @@ class Server:
                 next_msg = AppendEntry(self.currentTerm, self._id, self.nextIndex[msg.senderId]-1, self.log[self.nextIndex[msg.senderId]-1].term, self.log[self.nextIndex[msg.senderId]], self.commitIndex)
                 await self.message_sender(next_msg, msg.senderId)
 
+    async def op_handler(self, op):
+        self.log.append(op)
+        index = len(self.log)-1
+        self._apply_notifier[index] = asyncio.Event()
+        await self._apply_notifier[index]
+        return self.commitIndex >= index
+
     async def get_handler(self, msg):
-        pass
+        if self.state == State.leader:
+            op = GetOp(self.currentTerm, msg.key)
+            success = await self.op_handler(op)
+            if success:
+                reply_msg = GetReply(msg.messageId, False, self._id, True, op.handle(self))
+            else:
+                reply_msg = GetReply(msg.messageId, False, self._id, False, None)
+        else:
+            reply_msg = GetReply(msg.messageId, True, self.votedFor, False, None)
+        await self._conn.send_message_to_client(reply_msg, 0)
 
     async def put_handler(self, msg):
-        pass
+        if self.state == State.leader:
+            op = PutOp(self.currentTerm, msg.key, msg.value)
+            success = await self.op_handler(op)
+            if success:
+                reply_msg = PutReply(msg.messageId, False, self._id, True)
+            else:
+                reply_msg = PutReply(msg.messageId, False, self._id, False)
+        else:
+            reply_msg = PutReply(msg.messageId, True, self.votedFor, False)
+        await self._conn.send_message_to_client(reply_msg, 0)
 
     # method for applying log entries
     def apply_entries(self):
         while self.lastApplied < self.commitIndex:
             self.lastApplied += 1
             self.log[self.lastApplied].handle(self)
+            if self.lastApplied in self._apply_notifier:
+                self._apply_notifier[self.lastApplied].set()
 
     def print_log(self):
         print("log:", end=" ")
@@ -212,23 +240,27 @@ class Server:
         print(self.stateMachine)
 
     # methods for changing state
-    def exit_current_state(self):
+    async def exit_current_state(self):
         # cancel all the resend timers when exit
         for t in self._heartbeat_timer:
             t.cancel()
-        self._heartbeat_timer = []
         for t in self._message_resend_timer.values():
             t.cancel()
+        for e in self._apply_notifier.values():
+            e.set()
+        await asyncio.sleep(0)
+        self._heartbeat_timer = []
         self._message_resend_timer = {}
+        self._apply_notifier = {}
 
-    def enter_follower_state(self):
-        self.exit_current_state()
+    async def enter_follower_state(self):
+        await self.exit_current_state()
         self.state = State.follower
         self.reset_election_timer()
         print("Server {}: follower of term {}".format(self._id, self.currentTerm))
 
     async def enter_candidate_state(self):
-        self.exit_current_state()
+        await self.exit_current_state()
         self.state = State.candidate
         self._voted_for_me = set()
         self.currentTerm += 1
@@ -242,7 +274,7 @@ class Server:
                 await self.message_sender(msg, id)
 
     async def enter_leader_state(self):
-        self.exit_current_state()
+        await self.exit_current_state()
         self.state = State.leader
         self.cancel_election_timer()
         self.nextIndex = [len(self.log) for i in range(self._server_num)]
@@ -287,7 +319,7 @@ class Server:
             if msg.term > self.currentTerm:
                 self.currentTerm = msg.term
                 self.votedFor = None
-                self.enter_follower_state()
+                await self.enter_follower_state()
             await msg.handle(self)
 
     async def client_handler(self):
