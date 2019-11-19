@@ -14,7 +14,10 @@ class GetOp(LogItem):
         super().__init__(term, "get")
         self.key = key
     def handle(self, server):
-        return server.stateMachine[self.key]
+        try:
+            return server.stateMachine[self.key]
+        except KeyError:
+            return None
     def __str__(self):
         return "({}?,{})".format(self.key, self.term)
 

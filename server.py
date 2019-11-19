@@ -62,6 +62,7 @@ class Server:
         self.matchIndex = [0 for i in range(self._server_num)]
         self.stateMachine = {}
         if self.currentTerm == 0 and self._id == 0:
+            self.log = [NoOp(0), GetOp(0, 'x'), SetOp(0, 'x', 4), GetOp(0, 'x'), SetOp(0, 'y', 3), SetOp(0, 'x', 5), GetOp(0, 'x')]
             await self.enter_leader_state()
         else:
             self.enter_follower_state()
@@ -242,6 +243,12 @@ class Server:
         for id in range(self._server_num):
             if id != self._id:
                 self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
+        
+        self.log.append(NoOp(self.currentTerm))
+        for id in range(self._server_num):
+            if id != self._id and self.nextIndex[id] <= len(self.log)-1:
+                next_msg = AppendEntry(self.currentTerm, self._id, self.nextIndex[id]-1, self.log[self.nextIndex[id]-1].term, self.log[self.nextIndex[id]], self.commitIndex)
+                await self.message_sender(next_msg, id)
 
     # methods for managing election timer
     async def election_timout(self):
