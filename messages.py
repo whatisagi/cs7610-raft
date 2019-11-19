@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
+from typing import Generator, Optional
+import log
+
 __all__ = ["Message", "Test", "AppendEntry", "RequestVote", "AppendEntryReply", "RequestVoteReply", "Get", "Put", "GetReply", "PutReply"]
 
-def messageId_generator_fun():
+def messageId_generator_fun() -> Generator[int, None, None]:
     id = 0
     while True:
         yield id
@@ -13,23 +16,23 @@ messageId_generator = messageId_generator_fun()
 class Message:
     __slots__ = ["messageId"]
     def __init__(self):
-        self.messageId = next(messageId_generator)
+        self.messageId: int = next(messageId_generator)
 
 class Test(Message):
     __slots__ = ["senderId"]
-    def __init__(self, senderId):
+    def __init__(self, senderId: int) -> None:
         super().__init__()
         self.senderId = senderId
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.messageId) + ' ' + str(self.senderId)
-    async def handle(self, server):
+    async def handle(self, server) -> None:
         await server.test_handler(self)
 
 # server - server messages
 
 class AppendEntry(Message):
     __slots__ = ["term", "leaderId", "prevLogIndex", "prevLogTerm", "entry", "leaderCommit"]
-    def __init__(self, term, leaderId, prevLogIndex, prevLogTerm, entry, leaderCommit):
+    def __init__(self, term: int, leaderId: Optional[int], prevLogIndex: int, prevLogTerm: int, entry: Optional[log.LogItem], leaderCommit: int) -> None:
         super().__init__()
         self.term = term
         self.leaderId = leaderId
@@ -37,78 +40,78 @@ class AppendEntry(Message):
         self.prevLogTerm = prevLogTerm
         self.entry = entry
         self.leaderCommit = leaderCommit
-    async def handle(self, server):
+    async def handle(self, server) -> None:
         await server.append_entry_handler(self)
 
 class RequestVote(Message):
     __slots__ = ["term", "candidateId", "lastLogIndex", "lastLogTerm"]
-    def __init__(self, term, candidateId, lastLogIndex, lastLogTerm):
+    def __init__(self, term: int, candidateId: int, lastLogIndex: int, lastLogTerm: int) -> None:
         super().__init__()
         self.term = term
         self.candidateId = candidateId
         self.lastLogIndex = lastLogIndex
         self.lastLogTerm = lastLogTerm
-    async def handle(self, server):
+    async def handle(self, server) -> None:
         await server.request_vote_handler(self)
 
 class AppendEntryReply(Message):
     __slots__ = ["term", "success", "senderId"]
-    def __init__(self, messageId, term, success, senderId):
+    def __init__(self, messageId: int, term: int, success: bool, senderId: int) -> None:
         self.messageId = messageId
         self.term = term
         self.success = success
         self.senderId = senderId
-    async def handle(self, server):
+    async def handle(self, server) -> None:
         await server.append_entry_reply_handler(self)
 
 class RequestVoteReply(Message):
     __slots__ = ["term", "voteGranted", "senderId"]
-    def __init__(self, messageId, term, voteGranted, senderId):
+    def __init__(self, messageId: int, term: int, voteGranted: bool, senderId: int) -> None:
         self.messageId = messageId
         self.term = term
         self.voteGranted = voteGranted
         self.senderId = senderId
-    async def handle(self, server):
+    async def handle(self, server) -> None:
         await server.request_vote_reply_handler(self)
 
 #client-server messages
 
 class Get(Message):
     __slots__ = ["key"]
-    def __init__(self, key):
+    def __init__(self, key: str) -> None:
         super().__init__()
         self.key = key
-    async def handle(self, server):
+    async def handle(self, server) -> None:
         await server.get_handler(self)
 
 class Put(Message):
     __slots__ = ["key", "value"]
-    def __init__(self, key, value):
+    def __init__(self, key: str, value: int) -> None:
         super().__init__()
         self.key = key
         self.value = value
-    async def handle(self, server):
+    async def handle(self, server) -> None:
         await server.put_handler(self)
 
 class GetReply(Message):
     __slots__ = ["notleader", "leaderId", "success", "value"]
-    def __init__(self, messageId, notleader, leaderId, success, value):
+    def __init__(self, messageId: int, notleader: bool, leaderId: Optional[int], success: bool, value: Optional[int]) -> None:
         self.messageId = messageId
         self.notleader = notleader
         self.leaderId = leaderId
         self.success = success
         self.value = value
-    def handle(self, client):
+    def handle(self, client) -> None:
         client.get_reply_handler(self)
 
 class PutReply(Message):
     __slots__ = ["notleader", "leaderId", "success"]
-    def __init__(self, messageId, notleader, leaderId, success):
+    def __init__(self, messageId: int, notleader: bool, leaderId: Optional[int], success: bool) -> None:
         self.messageId = messageId
         self.notleader = notleader
         self.leaderId = leaderId
         self.success = success
-    def handle(self, client):
+    def handle(self, client) -> None:
         client.put_reply_handler(self)
 
 if __name__ == "__main__":
