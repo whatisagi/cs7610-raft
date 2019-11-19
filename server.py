@@ -103,15 +103,18 @@ class Server:
                     self.currentTerm = msg.term
                     self.votedFor = msg.candidateId
                     self.reset_election_timer()
-        print("Received RequestVote from Server {} for term {} with ({},{}), {}grant".format(msg.candidateId, msg.term, msg.lastLogTerm, msg.lastLogIndex, "" if voteGranted else "not "))
+        
+        if msg.term >= self.currentTerm:
+            print("Received RequestVote from Server {} for term {} with ({},{}), {}grant".format(msg.candidateId, msg.term, msg.lastLogTerm, msg.lastLogIndex, "" if voteGranted else "not "))
         self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before responding
         reply_msg = RequestVoteReply(msg.messageId, self.currentTerm, voteGranted, self._id)
         await self.message_sender(reply_msg, msg.candidateId, False)
 
     async def request_vote_reply_handler(self, msg):
         if self.state == State.candidate and msg.messageId in self._message_resend_timer:
-            #cancel the resender
+            # cancel the resender
             self._message_resend_timer[msg.messageId].cancel()
+            
             print("Received RequestVoteReply from Server {}, {}granted".format(msg.senderId, "" if msg.voteGranted else "not "))
             if msg.voteGranted:
                 self._voted_for_me.add(msg.senderId)
@@ -119,22 +122,49 @@ class Server:
                     await self.enter_leader_state()
 
     async def append_entry_handler(self, msg):
-        if self.state == State.candidate:
-            self.votedFor = msg.leaderId
-            self.enter_follower_state()
-        if self.state != State.leader:
-            if msg.entry is None: #heartbeat
+        success = False
+        if msg.term >= self.currentTerm:
+            if self.state == State.candidate:
+                self.votedFor = msg.leaderId
+                self.enter_follower_state()
+            # dealing with heartbeat
+            if msg.entry is None:
                 self.reset_election_timer()
-                print("Received heartbeat from Server {}".format(msg.leaderId))
+                print("Received heartbeat from Server {} for term {}".format(msg.leaderId, msg.term))
+            elif msg.prevLogIndex <= len(self.log)-1 and self.log[msg.prevLogIndex].term == msg.prevLogTerm:
+                success = True
+                if msg.prevLogIndex < len(self.log)-1:
+                    if self.log[msg.prevLogIndex+1].term != msg.entry.term:
+                        self.log = self.log[:msg.prevLogIndex+1]
+                if msg.prevLogIndex == len(self.log)-1:
+                    self.log.append(msg.entry)
+                if msg.leaderCommit > self.commitIndex:
+                    self.commitIndex = min(msg.leaderCommit, len(self.log)-1)
+                    self.apply_entries()
+                self.reset_election_timer()
+        
+        if msg.term >= self.currentTerm and msg.entry is not None:
+            print("Received AppendEntry from Server {} for term {} with ({},{},{},{}), {}".format(msg.learderId, msg.term, msg.prevLogIndex, msg.prevLogTerm, msg.entry, msg.leaderCommit, "success" if success else "fail"))
+        self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before responding
+        reply_msg = AppendEntryReply(msg.messageId, self.currentTerm, success, self._id)
+        await self.message_sender(reply_msg, msg.leaderId, False)
 
     async def append_entry_reply_handler(self, msg):
-        pass
+        if self.state == State.leader and msg.messageId in self._message_resend_timer:
+            # cancel the resender
+            self._message_resend_timer[msg.messageId].cancel()
 
     async def get_handler(self, msg):
         pass
 
     async def put_handler(self, msg):
         pass
+
+    # method for applying log entries
+    def apply_entries(self):
+        while self.lastApplied < self.commitIndex:
+            self.lastApplied += 1
+            self.log[self.lastApplied].handle(self)
 
     # methods for changing state
     def exit_current_state(self):
@@ -200,11 +230,10 @@ class Server:
     async def server_handler(self):
         while True:
             msg = await self._conn.receive_message_from_server()
-            if msg.term == 1:
-                continue
+            # if msg.term == 1:
+            #     continue
             # update term immediately
             if msg.term > self.currentTerm:
-                print("Receive message for term {}".format(msg.term))
                 self.currentTerm = msg.term
                 self.votedFor = None
                 self.enter_follower_state()

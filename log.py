@@ -15,6 +15,8 @@ class GetOp(LogItem):
         self.key = key
     def handle(self, server):
         return server.stateMachine[self.key]
+    def __str__(self):
+        return "({}?,{})".format(self.key, self.term)
 
 class PutOp(LogItem):
     __slots__ = ["key", "value"]
@@ -24,9 +26,13 @@ class PutOp(LogItem):
         self.value = value
     def handle(self, server):
         server.stateMachine[self.key] = self.value
+    def __str__(self):
+        return "({}<-{},{})".format(self.key, self.value, self.term)
 
 class NoOp(LogItem):
     def __init__(self, term):
         super().__init__(term, "no-op")
     def handle(self, server):
         pass
+    def __str__(self):
+        return "(,{})".format(self.term)
