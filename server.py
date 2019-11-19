@@ -85,7 +85,7 @@ class Server:
         try:
             while True:
                 msg = AppendEntry(self.currentTerm, self._id, 0, 0, None, self.commitIndex)
-                await self.message_sender(msg, id, False)  #TO BE DETERMINED: Resend Heartbeats or not?
+                await self.message_sender(msg, id, False)
                 await asyncio.sleep(Config.HEARTBEAT_TIMEOUT)
         except asyncio.CancelledError:
             pass
@@ -97,6 +97,8 @@ class Server:
     async def request_vote_handler(self, msg):
         print("Received RequestVote from Server {} for term {} with ({},{})".format(msg.candidateId, msg.term, msg.lastLogTerm, msg.lastLogIndex))
         voteGranted = False
+        if msg.term == 1:
+            return
         if msg.term >= self.currentTerm:
             if self.votedFor is None or self.votedFor == msg.candidateId:
                 if msg.lastLogTerm > self.log[-1].term or ( msg.lastLogTerm == self.log[-1].term and msg.lastLogIndex >= len(self.log)-1):
@@ -202,6 +204,7 @@ class Server:
             msg = await self._conn.receive_message_from_server()
             # update term immediately
             if msg.term > self.currentTerm:
+                print("Receive message for term {}".format(msg.term))
                 self.currentTerm = msg.term
                 self.votedFor = None
                 self.enter_follower_state()
