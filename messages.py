@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-__all__ = ["Test", "AppendEntry", "RequestVote", "AppendEntryReply", "RequestVoteReply", "Get", "Put", "GetReply", "PutReply"]
+__all__ = ["Message", "Test", "AppendEntry", "RequestVote", "AppendEntryReply", "RequestVoteReply", "Get", "Put", "GetReply", "PutReply"]
 
 def messageId_generator_fun():
     id = 0

@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-__all__ = ["GetOp", "PutOp", "NoOp"]
+__all__ = ["LogItem", "GetOp", "PutOp", "NoOp"]
 
 class LogItem:
     __slots__ = ["term", "command"]

@@ -8,8 +8,8 @@ from contextlib import suppress
 
 from config import Config
 from connection import ServerConnection
-from messages import Test, AppendEntry, RequestVote, AppendEntryReply, RequestVoteReply, Get, Put, GetReply, PutReply
-from log import GetOp, PutOp, NoOp
+from messages import Message, Test, AppendEntry, RequestVote, AppendEntryReply, RequestVoteReply, Get, Put, GetReply, PutReply
+from log import LogItem, GetOp, PutOp, NoOp
 
 __all__ = ["Server"]
 
@@ -24,7 +24,7 @@ class Storage:
                 votedFor = pickle.load(f)
                 log = pickle.load(f)
         except OSError:
-            currentTerm = 0
+            currentTerm: int = 0
             votedFor = 0
             log = [NoOp(0)]
         return (currentTerm, votedFor, log)
