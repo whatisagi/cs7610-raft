@@ -95,10 +95,7 @@ class Server:
         print(self._id, ':', msg)
 
     async def request_vote_handler(self, msg):
-        print("Received RequestVote from Server {} for term {} with ({},{})".format(msg.candidateId, msg.term, msg.lastLogTerm, msg.lastLogIndex))
         voteGranted = False
-        if msg.term == 1:
-            return
         if msg.term >= self.currentTerm:
             if self.votedFor is None or self.votedFor == msg.candidateId:
                 if msg.lastLogTerm > self.log[-1].term or ( msg.lastLogTerm == self.log[-1].term and msg.lastLogIndex >= len(self.log)-1):
@@ -106,6 +103,7 @@ class Server:
                     self.currentTerm = msg.term
                     self.votedFor = msg.candidateId
                     self.reset_election_timer()
+        print("Received RequestVote from Server {} for term {} with ({},{}), {}grant".format(msg.candidateId, msg.term, msg.lastLogTerm, msg.lastLogIndex, "" if voteGranted else "not "))
         self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before responding
         reply_msg = RequestVoteReply(msg.messageId, self.currentTerm, voteGranted, self._id)
         await self.message_sender(reply_msg, msg.candidateId, False)
@@ -114,7 +112,7 @@ class Server:
         if self.state == State.candidate and msg.messageId in self._message_resend_timer:
             #cancel the resender
             self._message_resend_timer[msg.messageId].cancel()
-            print("Received RequestVoteReply from Server {}, {} granted".format(msg.senderId, "" if msg.voteGranted else "not"))
+            print("Received RequestVoteReply from Server {}, {}granted".format(msg.senderId, "" if msg.voteGranted else "not "))
             if msg.voteGranted:
                 self._voted_for_me.add(msg.senderId)
                 if len(self._voted_for_me) + 1 > self._server_num // 2:
@@ -202,6 +200,8 @@ class Server:
     async def server_handler(self):
         while True:
             msg = await self._conn.receive_message_from_server()
+            if msg.term == 1:
+                continue
             # update term immediately
             if msg.term > self.currentTerm:
                 print("Receive message for term {}".format(msg.term))
