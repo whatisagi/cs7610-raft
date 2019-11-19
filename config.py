@@ -6,7 +6,7 @@ class Config:
     BUF_SIZE = 4096
     MAX_SERVER = 10
     MAX_CLIENT = 1
-    TRY_LIMIT = 2
+    TRY_LIMIT = 100
     RESEND_TIMEOUT = 0.5
     ELECTION_TIMEOUT = 10.0
     HEARTBEAT_TIMEOUT = 5.0

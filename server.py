@@ -79,7 +79,6 @@ class Server:
     async def message_sender(self, msg, id, resend=True):
         await self._conn.send_message_to_server(msg, id)
         if resend:
-            print("Resender to {} for {}".format(id, msg))
             self._message_resend_timer[msg.messageId] = self._loop.create_task(self.message_resender(msg, id))
 
     # methods for sending heartbeats
