@@ -146,7 +146,7 @@ class Server:
                 self.apply_entries()
         
         if msg.term >= self.currentTerm and msg.entry is not None:
-            print("Received AppendEntry from Server {} for term {} with ({},{},{},{}), {}".format(msg.learderId, msg.term, msg.prevLogIndex, msg.prevLogTerm, msg.entry, msg.leaderCommit, "success" if success else "fail"))
+            print("Received AppendEntry from Server {} for term {} with ({},{},{},{}), {}".format(msg.leaderId, msg.term, msg.prevLogIndex, msg.prevLogTerm, msg.entry, msg.leaderCommit, "success" if success else "fail"))
         self.print_log()
         self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before responding
         reply_msg = AppendEntryReply(msg.messageId, self.currentTerm, success, self._id)
@@ -200,6 +200,8 @@ class Server:
             print(self.log[i], end=",")
         if self.commitIndex < len(self.log)-1:
             print(self.log[-1])
+        else:
+            print()
 
     # methods for changing state
     def exit_current_state(self):
