@@ -62,7 +62,7 @@ class Server:
         self.matchIndex = [0 for i in range(self._server_num)]
         self.stateMachine = {}
         if self.currentTerm == 0 and self._id == 0:
-            self.log = [NoOp(0), GetOp(0, 'x'), SetOp(0, 'x', 4), GetOp(0, 'x'), SetOp(0, 'y', 3), SetOp(0, 'x', 5), GetOp(0, 'x')]
+            self.log = [NoOp(0), GetOp(0, 'x'), PutOp(0, 'x', 4), GetOp(0, 'x'), PutOp(0, 'y', 3), PutOp(0, 'x', 5), GetOp(0, 'x')]
             await self.enter_leader_state()
         else:
             self.enter_follower_state()
