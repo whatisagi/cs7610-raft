@@ -114,11 +114,12 @@ class Server:
         if self.state == State.candidate and msg.messageId in self._message_resend_timer:
             # cancel the resender
             self._message_resend_timer[msg.messageId].cancel()
-            
+            del self._message_resend_timer[msg.messageId]
+
             print("Received RequestVoteReply from Server {}, {}granted".format(msg.senderId, "" if msg.voteGranted else "not "))
             if msg.voteGranted:
                 self._voted_for_me.add(msg.senderId)
-                if len(self._voted_for_me) + 1 > self._server_num // 2:
+                if len(self._voted_for_me)+1 > self._server_num // 2:
                     await self.enter_leader_state()
 
     async def append_entry_handler(self, msg):
@@ -138,13 +139,14 @@ class Server:
                         self.log = self.log[:msg.prevLogIndex+1]
                 if msg.prevLogIndex == len(self.log)-1:
                     self.log.append(msg.entry)
-                if msg.leaderCommit > self.commitIndex:
-                    self.commitIndex = min(msg.leaderCommit, len(self.log)-1)
-                    self.apply_entries()
                 self.reset_election_timer()
+            if msg.leaderCommit > self.commitIndex:
+                self.commitIndex = min(msg.leaderCommit, len(self.log)-1)
+                self.apply_entries()
         
         if msg.term >= self.currentTerm and msg.entry is not None:
             print("Received AppendEntry from Server {} for term {} with ({},{},{},{}), {}".format(msg.learderId, msg.term, msg.prevLogIndex, msg.prevLogTerm, msg.entry, msg.leaderCommit, "success" if success else "fail"))
+        self.print_log()
         self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before responding
         reply_msg = AppendEntryReply(msg.messageId, self.currentTerm, success, self._id)
         await self.message_sender(reply_msg, msg.leaderId, False)
@@ -153,6 +155,29 @@ class Server:
         if self.state == State.leader and msg.messageId in self._message_resend_timer:
             # cancel the resender
             self._message_resend_timer[msg.messageId].cancel()
+            del self._message_resend_timer[msg.messageId]
+
+            print("Received AppendEntryReply from Server {} for term {}, {}".format(msg.senderId, msg.term, "success" if msg.success else "fail"))
+            if msg.success:
+                self.matchIndex[msg.senderId] = self.nextIndex[msg.senderId]
+                self.nextIndex[msg.senderId] += 1
+
+                # update commitIndex and apply log entries
+                N = self.matchIndex[msg.senderId]
+                while N > self.commitIndex and self.log[N].term == self.currentTerm:
+                    count = len([1 for id in range(self._server_num) if id != self._id and self.matchIndex[id] >= N])
+                    if count+1 > self._server_num // 2:
+                        self.commitIndex = N
+                        self.apply_entries()
+                        self.print_log()
+                        break
+                    N -= 1
+            else:
+                self.nextIndex[msg.senderId] -= 1
+            
+            if self.nextIndex[msg.senderId] <= len(self.log)-1:
+                next_msg = AppendEntry(self.currentTerm, self._id, self.nextIndex[msg.senderId]-1, self.log[self.nextIndex[msg.senderId]-1].term, self.log[self.nextIndex[msg.senderId]], self.commitIndex)
+                await self.message_sender(next_msg, msg.senderId)
 
     async def get_handler(self, msg):
         pass
@@ -165,6 +190,15 @@ class Server:
         while self.lastApplied < self.commitIndex:
             self.lastApplied += 1
             self.log[self.lastApplied].handle(self)
+
+    def print_log(self):
+        for i in range(self.commitIndex):
+            print(self.log[i], end=',')
+        print(self.log[self.commitIndex], end='|')
+        for i in range(self.commitIndex+1, len(self.log)-1):
+            print(self.log[i], end=",")
+        if self.commitIndex < len(self.log)-1:
+            print(self.log[-1])
 
     # methods for changing state
     def exit_current_state(self):
