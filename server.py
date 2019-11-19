@@ -5,6 +5,7 @@ import pickle
 import enum
 import random
 from contextlib import suppress
+from typing import Optional, List, Dict, Tuple, Set
 
 from config import Config
 from connection import ServerConnection
@@ -16,20 +17,20 @@ __all__ = ["Server"]
 class Storage:
     __slots__ = ["_id"]
 
-    def read(self, id: int):
+    def read(self, id: int) -> Tuple[int, Optional[int], List[LogItem]]:
         self._id = id
         try:
             with open("server"+str(id)+".storage", "rb") as f:
                 currentTerm: int = pickle.load(f)
-                votedFor = pickle.load(f)
-                log = pickle.load(f)
+                votedFor: Optional[int] = pickle.load(f)
+                log: List[LogItem] = pickle.load(f)
         except OSError:
             currentTerm: int = 0
-            votedFor = 0
-            log = [NoOp(0)]
+            votedFor: Optional[int] = 0
+            log: List[LogItem] = [NoOp(0)]
         return (currentTerm, votedFor, log)
 
-    def store(self, currentTerm, votedFor, log):
+    def store(self, currentTerm: int, votedFor: Optional[int], log: List[LogItem]) -> None:
         with open("server"+str(self._id)+".storage", "wb") as f:
             pickle.dump(currentTerm, f)
             pickle.dump(votedFor, f)
@@ -45,25 +46,25 @@ class Server:
         "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex", "state", "stateMachine"]
 
     # methods for initialization
-    def __init__(self, config=Config, storage=Storage()):
+    def __init__(self, config: Config=Config, storage: Storage=Storage()) -> None:
         self._conn = ServerConnection(config)
-        self._id = self._conn.server_id
+        self._id: int = self._conn.server_id
         self._server_num = len(config.SERVER_NAMES)
-        self._loop = asyncio.get_event_loop()
+        self._loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self._storage = storage
-        self._voted_for_me = set()
-        self._message_resend_timer = {}
+        self._voted_for_me: Set[int] = set()
+        self._message_resend_timer: Dict[int, asyncio.Task] = {}
         self._election_timer = None
         self._heartbeat_timer = []
         self._apply_notifier = {}
 
-    async def init(self):
+    async def init(self) -> None:
         self.currentTerm, self.votedFor, self.log = self._storage.read(self._id)
         self.commitIndex = 0
         self.lastApplied = 0
-        self.nextIndex = [len(self.log) for i in range(self._server_num)]
-        self.matchIndex = [0 for i in range(self._server_num)]
-        self.stateMachine = {}
+        self.nextIndex: List[int] = [len(self.log) for i in range(self._server_num)]
+        self.matchIndex: List[int] = [0 for i in range(self._server_num)]
+        self.stateMachine: Dict[str, int] = {}
         if self.currentTerm == 0 and self._id == 0:
             self.log = [NoOp(0), GetOp(0, 'x'), PutOp(0, 'x', 4), GetOp(0, 'x'), PutOp(0, 'y', 3), PutOp(0, 'x', 5), GetOp(0, 'x')]
             await self.enter_leader_state()
@@ -71,7 +72,7 @@ class Server:
             await self.enter_follower_state()
 
     # methods for sending and resending messages
-    async def message_resender(self, msg, id, timeout=Config.RESEND_TIMEOUT, try_limit=Config.TRY_LIMIT): #TO BE DETERMINED: Indefinitely retry or not?
+    async def message_resender(self, msg: Message, id: int, timeout: float=Config.RESEND_TIMEOUT, try_limit: int=Config.TRY_LIMIT) -> None: #TO BE DETERMINED: Indefinitely retry or not?
         try:
             for _ in range(try_limit):
                 await asyncio.sleep(timeout)
@@ -79,7 +80,7 @@ class Server:
         except asyncio.CancelledError:
             pass
 
-    async def message_sender(self, msg, id, resend=True):
+    async def message_sender(self, msg: Message, id: int, resend: bool=True):
         await self._conn.send_message_to_server(msg, id)
         if resend:
             self._message_resend_timer[msg.messageId] = self._loop.create_task(self.message_resender(msg, id))
