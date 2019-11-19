@@ -193,6 +193,7 @@ class Server:
             self.log[self.lastApplied].handle(self)
 
     def print_log(self):
+        print("log:", end=" ")
         for i in range(self.commitIndex):
             print(self.log[i], end=',')
         print(self.log[self.commitIndex], end='|')
@@ -202,6 +203,7 @@ class Server:
             print(self.log[-1])
         else:
             print()
+        print(self.stateMachine)
 
     # methods for changing state
     def exit_current_state(self):
