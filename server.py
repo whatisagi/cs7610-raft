@@ -125,6 +125,7 @@ class Server:
 
     async def append_entry_handler(self, msg):
         success = False
+        commitIndex_changed = False
         if msg.term >= self.currentTerm:
             if self.state == State.candidate:
                 self.votedFor = msg.leaderId
@@ -142,12 +143,16 @@ class Server:
                     self.log.append(msg.entry)
                 self.reset_election_timer()
             if msg.leaderCommit > self.commitIndex:
+                oldCommitIndex = self.commitIndex
                 self.commitIndex = min(msg.leaderCommit, len(self.log)-1)
+                if self.commitIndex != oldCommitIndex:
+                    commitIndex_changed = True
                 self.apply_entries()
         
         if msg.term >= self.currentTerm and msg.entry is not None:
             print("Received AppendEntry from Server {} for term {} with ({},{},{},{}), {}".format(msg.leaderId, msg.term, msg.prevLogIndex, msg.prevLogTerm, msg.entry, msg.leaderCommit, "success" if success else "fail"))
-        self.print_log()
+        if commitIndex_changed:
+            self.print_log()
         self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before responding
         reply_msg = AppendEntryReply(msg.messageId, self.currentTerm, success, self._id)
         await self.message_sender(reply_msg, msg.leaderId, False)
