@@ -56,7 +56,7 @@ class Server:
         self._message_resend_timer: Dict[int, asyncio.Task] = {}
         self._election_timer: Optional[asyncio.Task] = None
         self._heartbeat_timer: List[asyncio.Task] = []
-        self._apply_notifier: Dict[int, asyncio.Event] = {}
+        self._apply_notifier: Optional[asyncio.Event] = None
 
     async def init(self) -> None:
         self.currentTerm, self.votedFor, self.log = self._storage.read(self._id)
@@ -131,11 +131,13 @@ class Server:
         success = False
         to_print_log = False
         if msg.term >= self.currentTerm:
+            # become follower if in candidate state
             if self.state == State.candidate:
                 self.votedFor = msg.leaderId
                 await self.enter_follower_state()
-            # dealing with heartbeat
+
             if msg.entry is None:
+                # dealing with heartbeat
                 self.reset_election_timer()
                 print("Received heartbeat from Server {} for term {}".format(msg.leaderId, msg.term))
             elif msg.prevLogIndex <= len(self.log)-1 and self.log[msg.prevLogIndex].term == msg.prevLogTerm:
@@ -186,52 +188,64 @@ class Server:
             else:
                 self.nextIndex[msg.senderId] -= 1
             
+            # continue the process of appending entries
             if self.nextIndex[msg.senderId] <= len(self.log)-1:
                 next_msg = AppendEntry(self.currentTerm, self._id, self.nextIndex[msg.senderId]-1, self.log[self.nextIndex[msg.senderId]-1].term, self.log[self.nextIndex[msg.senderId]], self.commitIndex)
                 await self.message_sender(next_msg, msg.senderId)
+
+    async def get_handler(self, msg: Get) -> None:
+        reply_msg = None
+        if self.state == State.leader:
+            op = GetOp(self.currentTerm, msg.key)
+            print("Received {} from client".format(op))
+            commit_success = await self.op_handler(op)
+            if commit_success: # successfully commit and apply the log entry
+                res = op.handle(self)
+                if res is not None: # key is in the state machine
+                    reply_msg = GetReply(msg.messageId, False, self._id, True, res)
+                else: # key is not in the state machine, fail
+                    reply_msg = GetReply(msg.messageId, False, self._id, False, None)
+        if reply_msg is None: # not leader when replying
+            reply_msg = GetReply(msg.messageId, True, self.votedFor, False, None)
+        await self._conn.send_message_to_client(reply_msg, 0)
+
+    async def put_handler(self, msg: Put) -> None:
+        reply_msg = None
+        if self.state == State.leader:
+            op = PutOp(self.currentTerm, msg.key, msg.value)
+            print("Received {} from client".format(op))
+            commit_success = await self.op_handler(op)
+            if commit_success: # successfully commit and apply the log entry
+                reply_msg = PutReply(msg.messageId, False, self._id, True)
+        if reply_msg is None: # not leader when replying
+            reply_msg = PutReply(msg.messageId, True, self.votedFor, False)
+        await self._conn.send_message_to_client(reply_msg, 0)
+
+    # methods for handling log entries
+    def apply_entries(self) -> None:
+        while self.lastApplied < self.commitIndex:
+            self.lastApplied += 1
+            self.log[self.lastApplied].handle(self)
+        if self.commitIndex == len(self.log)-1 and self._apply_notifier is not None:
+            # the latest log entry is committed, can respond to client now
+            self._apply_notifier.set()
 
     async def op_handler(self, op: LogItem) -> bool:
         self.log.append(op)
         self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before committing
         index = len(self.log)-1
-        self._apply_notifier[index] = asyncio.Event()
-        await self._apply_notifier[index]
+        self._apply_notifier = asyncio.Event()
+
+        # sending initial AppendEntry RPCs
+        for id in range(self._server_num):
+            if id != self._id and self.nextIndex[id] <= index:
+                msg = AppendEntry(self.currentTerm, self._id, self.nextIndex[id]-1, self.log[self.nextIndex[id]-1].term, self.log[self.nextIndex[id]], self.commitIndex)
+                await self.message_sender(msg, id)
+
+        # waiting for the entry to be committed
+        # but it may return before really committed when a leader turns into a follwer
+        await self._apply_notifier
         return self.commitIndex >= index
-
-    async def get_handler(self, msg: Get) -> None:
-        res = None
-        if self.state == State.leader:
-            op = GetOp(self.currentTerm, msg.key)
-            print("Received {} from client".format(op))
-            success = await self.op_handler(op)
-            if success:
-                res = op.handle(self)
-        if self.state == State.leader:
-            reply_msg = GetReply(msg.messageId, False, self._id, True, res)
-        else:
-            reply_msg = GetReply(msg.messageId, True, self.votedFor, False, None)
-        await self._conn.send_message_to_client(reply_msg, 0)
-
-    async def put_handler(self, msg: Put) -> None:
-        if self.state == State.leader:
-            op = PutOp(self.currentTerm, msg.key, msg.value)
-            print("Received {} from client".format(op))
-            success = await self.op_handler(op)
-            if success:
-                reply_msg = PutReply(msg.messageId, False, self._id, True)
-            else:
-                reply_msg = PutReply(msg.messageId, False, self._id, False)
-        else:
-            reply_msg = PutReply(msg.messageId, True, self.votedFor, False)
-        await self._conn.send_message_to_client(reply_msg, 0)
-
-    # method for applying log entries
-    def apply_entries(self) -> None:
-        while self.lastApplied < self.commitIndex:
-            self.lastApplied += 1
-            self.log[self.lastApplied].handle(self)
-            if self.lastApplied in self._apply_notifier:
-                self._apply_notifier[self.lastApplied].set()
 
     def print_log(self) -> None:
         print("log:", end=" ")
@@ -253,8 +267,7 @@ class Server:
             t.cancel()
         for t in self._message_resend_timer.values():
             t.cancel()
-        for e in self._apply_notifier.values():
-            e.set()
+        self._apply_notifier.set()
         await asyncio.sleep(0)
         self._heartbeat_timer = []
         self._message_resend_timer = {}
@@ -293,14 +306,12 @@ class Server:
             if id != self._id:
                 self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
         
-        self.log.append(NoOp(self.currentTerm))
-        for id in range(self._server_num):
-            if id != self._id and self.nextIndex[id] <= len(self.log)-1:
-                msg = AppendEntry(self.currentTerm, self._id, self.nextIndex[id]-1, self.log[self.nextIndex[id]-1].term, self.log[self.nextIndex[id]], self.commitIndex)
-                await self.message_sender(msg, id)
+        # not really needed; for testing mainly
+        op = NoOp(self.currentTerm)
+        await self.op_handler(op)
 
     # methods for managing election timer
-    async def election_timout(self) -> None:
+    async def election_timeout(self) -> None:
         try:
             timeout = random.uniform(Config.ELECTION_TIMEOUT, 2 * Config.ELECTION_TIMEOUT)
             await asyncio.sleep(timeout)
@@ -314,7 +325,7 @@ class Server:
 
     def reset_election_timer(self, timeouted: bool=False) -> None:
         self.cancel_election_timer(timeouted)
-        self._election_timer = self._loop.create_task(self.election_timout())
+        self._election_timer = self._loop.create_task(self.election_timeout())
 
     # main methods for interacting with servers and client
     async def server_handler(self):
