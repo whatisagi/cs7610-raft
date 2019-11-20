@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
-from typing import Generator, Optional
-import log
+from typing import Generator, Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from log import LogItem
+    from server import Server
 
 __all__ = ["Message", "Test", "AppendEntry", "RequestVote", "AppendEntryReply", "RequestVoteReply", "Get", "Put", "GetReply", "PutReply"]
 
@@ -25,14 +27,14 @@ class Test(Message):
         self.senderId = senderId
     def __str__(self) -> str:
         return str(self.messageId) + ' ' + str(self.senderId)
-    async def handle(self, server) -> None:
+    async def handle(self, server: "Server") -> None:
         await server.test_handler(self)
 
 # server - server messages
 
 class AppendEntry(Message):
     __slots__ = ["term", "leaderId", "prevLogIndex", "prevLogTerm", "entry", "leaderCommit"]
-    def __init__(self, term: int, leaderId: Optional[int], prevLogIndex: int, prevLogTerm: int, entry: Optional[log.LogItem], leaderCommit: int) -> None:
+    def __init__(self, term: int, leaderId: Optional[int], prevLogIndex: int, prevLogTerm: int, entry: "Optional[LogItem]", leaderCommit: int) -> None:
         super().__init__()
         self.term = term
         self.leaderId = leaderId
@@ -40,7 +42,7 @@ class AppendEntry(Message):
         self.prevLogTerm = prevLogTerm
         self.entry = entry
         self.leaderCommit = leaderCommit
-    async def handle(self, server) -> None:
+    async def handle(self, server: "Server") -> None:
         await server.append_entry_handler(self)
 
 class RequestVote(Message):
@@ -51,7 +53,7 @@ class RequestVote(Message):
         self.candidateId = candidateId
         self.lastLogIndex = lastLogIndex
         self.lastLogTerm = lastLogTerm
-    async def handle(self, server) -> None:
+    async def handle(self, server: "Server") -> None:
         await server.request_vote_handler(self)
 
 class AppendEntryReply(Message):
@@ -61,7 +63,7 @@ class AppendEntryReply(Message):
         self.term = term
         self.success = success
         self.senderId = senderId
-    async def handle(self, server) -> None:
+    async def handle(self, server: "Server") -> None:
         await server.append_entry_reply_handler(self)
 
 class RequestVoteReply(Message):
@@ -71,7 +73,7 @@ class RequestVoteReply(Message):
         self.term = term
         self.voteGranted = voteGranted
         self.senderId = senderId
-    async def handle(self, server) -> None:
+    async def handle(self, server: "Server") -> None:
         await server.request_vote_reply_handler(self)
 
 #client-server messages
@@ -81,7 +83,7 @@ class Get(Message):
     def __init__(self, key: str) -> None:
         super().__init__()
         self.key = key
-    async def handle(self, server) -> None:
+    async def handle(self, server: "Server") -> None:
         await server.get_handler(self)
 
 class Put(Message):
@@ -90,7 +92,7 @@ class Put(Message):
         super().__init__()
         self.key = key
         self.value = value
-    async def handle(self, server) -> None:
+    async def handle(self, server: "Server") -> None:
         await server.put_handler(self)
 
 class GetReply(Message):

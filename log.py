@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from server import Server
 
 __all__ = ["LogItem", "GetOp", "PutOp", "NoOp"]
 
@@ -15,7 +17,7 @@ class GetOp(LogItem):
     def __init__(self, term: int, key: str) -> None:
         super().__init__(term, "get")
         self.key = key
-    def handle(self, server) -> Optional[int]:
+    def handle(self, server: "Server") -> Optional[int]:
         try:
             return server.stateMachine[self.key]
         except KeyError:
@@ -29,7 +31,7 @@ class PutOp(LogItem):
         super().__init__(term, "put")
         self.key = key
         self.value = value
-    def handle(self, server) -> None:
+    def handle(self, server: "Server") -> None:
         server.stateMachine[self.key] = self.value
     def __str__(self) -> str:
         return "({}<-{},{})".format(self.key, self.value, self.term)
@@ -37,7 +39,7 @@ class PutOp(LogItem):
 class NoOp(LogItem):
     def __init__(self, term: int) -> None:
         super().__init__(term, "no-op")
-    def handle(self, server) -> None:
+    def handle(self, server: "Server") -> None:
         pass
     def __str__(self) -> str:
         return "(nop,{})".format(self.term)
