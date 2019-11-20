@@ -50,7 +50,7 @@ class Server:
         self._conn = ServerConnection(config)
         self._id: int = self._conn.server_id
         self._server_num = len(config.SERVER_NAMES)
-        self._loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+        self._loop = asyncio.get_event_loop()
         self._storage = storage
         self._voted_for_me: Set[int] = set()
         self._message_resend_timer: Dict[int, asyncio.Task] = {}
@@ -142,14 +142,17 @@ class Server:
                 print("Received heartbeat from Server {} for term {}".format(msg.leaderId, msg.term))
             elif msg.prevLogIndex <= len(self.log)-1 and self.log[msg.prevLogIndex].term == msg.prevLogTerm:
                 success = True
-                if msg.prevLogIndex < len(self.log)-1:
-                    if self.log[msg.prevLogIndex+1].term != msg.entry.term:
-                        self.log = self.log[:msg.prevLogIndex+1]
+                # remove the following log entries with different term
+                if msg.prevLogIndex < len(self.log)-1 and self.log[msg.prevLogIndex+1].term != msg.entry.term:
+                    self.log = self.log[:msg.prevLogIndex+1]
+                # append the log entry
                 if msg.prevLogIndex == len(self.log)-1:
                     self.log.append(msg.entry)
                     to_print_log = True
                 self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before committing
                 self.reset_election_timer()
+            
+            # update commitIndex
             if msg.leaderCommit > self.commitIndex:
                 oldCommitIndex = self.commitIndex
                 self.commitIndex = min(msg.leaderCommit, len(self.log)-1)
