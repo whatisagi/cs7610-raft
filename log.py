@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from server import Server
 
@@ -43,3 +43,13 @@ class NoOp(LogItem):
         pass
     def __str__(self) -> str:
         return "(nop,{})".format(self.term)
+
+class ConfigOp(LogItem):
+    def __init__(self, term: int, config: List[int], new_config: List[int]=None) -> None:
+        super().__init__(term, "config")
+        self.config = config
+        self.new_config = new_config
+    def handle(self, server: "Server") -> None:
+        pass
+    def __str__(self) -> str:
+        return "({};{}, {})".format(self.config, self.new_config, self.term)

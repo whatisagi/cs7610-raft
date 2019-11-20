@@ -10,14 +10,14 @@ from typing import Optional, List, Dict, Tuple, Set
 from config import Config
 from connection import ServerConnection
 from messages import Message, Test, AppendEntry, RequestVote, AppendEntryReply, RequestVoteReply, Get, Put, GetReply, PutReply
-from log import LogItem, GetOp, PutOp, NoOp
+from log import LogItem, GetOp, PutOp, NoOp, ConfigOp
 
 __all__ = ["Server"]
 
 class Storage:
     __slots__ = ["_id"]
 
-    def read(self, id: int) -> Tuple[int, Optional[int], List[LogItem]]:
+    def read(self, id: int) -> Tuple[int, Optional[int], List[LogItem], List[int]]:
         self._id = id
         try:
             with open("server"+str(id)+".storage", "rb") as f:
@@ -28,7 +28,8 @@ class Storage:
             currentTerm: int = 0
             votedFor: Optional[int] = 0
             log: List[LogItem] = [NoOp(0)]
-        return (currentTerm, votedFor, log)
+        serverConfig = Config.INIT_SERVER_CONFIG
+        return (currentTerm, votedFor, log, serverConfig)
 
     def store(self, currentTerm: int, votedFor: Optional[int], log: List[LogItem]) -> None:
         with open("server"+str(self._id)+".storage", "wb") as f:
@@ -43,7 +44,7 @@ class State(enum.Enum):
 
 class Server:
     __slots__ = ["_conn", "_id", "_server_num", "_loop", "_storage", "_voted_for_me", "_message_resend_timer", "_election_timer", "_heartbeat_timer", "_apply_notifier",
-        "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex", "state", "stateMachine"]
+        "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex", "state", "stateMachine", "serverConfig"]
 
     # methods for initialization
     def __init__(self, config: Config=Config, storage: Storage=Storage()) -> None:
@@ -59,7 +60,7 @@ class Server:
         self._apply_notifier: Optional[asyncio.Event] = None
 
     async def init(self) -> None:
-        self.currentTerm, self.votedFor, self.log = self._storage.read(self._id)
+        self.currentTerm, self.votedFor, self.log, self.serverConfig = self._storage.read(self._id)
         self.commitIndex = 0
         self.lastApplied = 0
         self.nextIndex: List[int] = [len(self.log) for i in range(self._server_num)]
@@ -124,7 +125,7 @@ class Server:
             print("Received RequestVoteReply from Server {}, {}granted".format(msg.senderId, "" if msg.voteGranted else "not "))
             if msg.voteGranted:
                 self._voted_for_me.add(msg.senderId)
-                if len(self._voted_for_me)+1 > self._server_num // 2:
+                if len(self._voted_for_me)+1 > len(self.serverConfig) // 2:
                     await self.enter_leader_state()
 
     async def append_entry_handler(self, msg: AppendEntry) -> None:
@@ -181,8 +182,8 @@ class Server:
                 # update commitIndex and apply log entries
                 N = self.matchIndex[msg.senderId]
                 while N > self.commitIndex and self.log[N].term == self.currentTerm:
-                    count = len([1 for id in range(self._server_num) if id != self._id and self.matchIndex[id] >= N])
-                    if count+1 > self._server_num // 2:
+                    count = len([1 for id in range(self._server_num) if id != self._id and id in self.serverConfig and self.matchIndex[id] >= N])
+                    if count+1 > len(self.serverConfig) // 2:
                         self.commitIndex = N
                         self.apply_entries()
                         self.print_log()
@@ -241,7 +242,7 @@ class Server:
 
         # sending initial AppendEntry RPCs
         for id in range(self._server_num):
-            if id != self._id and self.nextIndex[id] <= index:
+            if id != self._id and id in self.serverConfig and self.nextIndex[id] <= index:
                 msg = AppendEntry(self.currentTerm, self._id, self.nextIndex[id]-1, self.log[self.nextIndex[id]-1].term, self.log[self.nextIndex[id]], self.commitIndex)
                 await self.message_sender(msg, id)
 
@@ -292,7 +293,7 @@ class Server:
         print("Server {}: starting election for term {}".format(self._id, self.currentTerm))
 
         for id in range(self._server_num):
-            if id != self._id:
+            if id != self._id and id in self.serverConfig:
                 msg = RequestVote(self.currentTerm, self._id, len(self.log)-1, self.log[-1].term)
                 await self.message_sender(msg, id)
 
@@ -306,7 +307,7 @@ class Server:
 
         # send out hearbeats immediately and indefinitely
         for id in range(self._server_num):
-            if id != self._id:
+            if id != self._id and id in self.serverConfig:
                 self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
         
         # not really needed; for testing mainly
