@@ -111,7 +111,7 @@ class Server:
         
         if msg.term >= self.currentTerm:
             print("Received RequestVote from Server {} for term {} with ({},{}), {}grant".format(msg.candidateId, msg.term, msg.lastLogTerm, msg.lastLogIndex, "" if voteGranted else "not "))
-        self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before responding
+        self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before voting
         reply_msg = RequestVoteReply(msg.messageId, self.currentTerm, voteGranted, self._id)
         await self.message_sender(reply_msg, msg.candidateId, False)
 
@@ -146,6 +146,7 @@ class Server:
                 if msg.prevLogIndex == len(self.log)-1:
                     self.log.append(msg.entry)
                     to_print_log = True
+                self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before committing
                 self.reset_election_timer()
             if msg.leaderCommit > self.commitIndex:
                 oldCommitIndex = self.commitIndex
@@ -158,7 +159,6 @@ class Server:
             print("Received AppendEntry from Server {} for term {} with ({},{},{},{}), {}".format(msg.leaderId, msg.term, msg.prevLogIndex, msg.prevLogTerm, msg.entry, msg.leaderCommit, "success" if success else "fail"))
         if to_print_log:
             self.print_log()
-        self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before responding
         reply_msg = AppendEntryReply(msg.messageId, self.currentTerm, success, self._id)
         await self.message_sender(reply_msg, msg.leaderId, False)
 
@@ -192,19 +192,22 @@ class Server:
 
     async def op_handler(self, op: LogItem) -> bool:
         self.log.append(op)
+        self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before committing
         index = len(self.log)-1
         self._apply_notifier[index] = asyncio.Event()
         await self._apply_notifier[index]
         return self.commitIndex >= index
 
     async def get_handler(self, msg: Get) -> None:
+        res = None
         if self.state == State.leader:
             op = GetOp(self.currentTerm, msg.key)
+            print("Received {} from client".format(op))
             success = await self.op_handler(op)
             if success:
-                reply_msg = GetReply(msg.messageId, False, self._id, True, op.handle(self))
-            else:
-                reply_msg = GetReply(msg.messageId, False, self._id, False, None)
+                res = op.handle(self)
+        if self.state == State.leader:
+            reply_msg = GetReply(msg.messageId, False, self._id, True, res)
         else:
             reply_msg = GetReply(msg.messageId, True, self.votedFor, False, None)
         await self._conn.send_message_to_client(reply_msg, 0)
@@ -212,6 +215,7 @@ class Server:
     async def put_handler(self, msg: Put) -> None:
         if self.state == State.leader:
             op = PutOp(self.currentTerm, msg.key, msg.value)
+            print("Received {} from client".format(op))
             success = await self.op_handler(op)
             if success:
                 reply_msg = PutReply(msg.messageId, False, self._id, True)
