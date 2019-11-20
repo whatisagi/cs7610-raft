@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Tuple, Set
 
 from config import Config
 from connection import ServerConnection
-from messages import Message, Test, AppendEntry, RequestVote, AppendEntryReply, RequestVoteReply, Get, Put, GetReply, PutReply
+from messages import Message, Test, AppendEntry, RequestVote, AppendEntryReply, RequestVoteReply, Get, Put, AddServers, GetReply, PutReply
 from log import LogItem, GetOp, PutOp, NoOp, ConfigOp
 
 __all__ = ["Server"]
@@ -224,6 +224,9 @@ class Server:
         if reply_msg is None: # not leader when replying
             reply_msg = PutReply(msg.messageId, True, self.votedFor, False)
         await self._conn.send_message_to_client(reply_msg, 0)
+
+    async def add_servers_handler(self, msg: AddServers) -> None:
+        pass
 
     # methods for handling log entries
     def apply_entries(self) -> None:

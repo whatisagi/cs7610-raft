@@ -95,6 +95,14 @@ class Put(Message):
     async def handle(self, server: "Server") -> None:
         await server.put_handler(self)
 
+class AddServers(Message):
+    __slots__ = ["servers"]
+    def __init__(self, servers: List[int]) -> None:
+        super().__init__()
+        self.servers = servers
+    async def handle(self, server: "Server") -> None:
+        await server.add_servers_handler(self)
+
 class GetReply(Message):
     __slots__ = ["notleader", "leaderId", "success", "value"]
     def __init__(self, messageId: int, notleader: bool, leaderId: Optional[int], success: bool, value: Optional[int]) -> None:
