@@ -132,7 +132,13 @@ class Client:
                 #await msg.handle(self) #debug
                 if msg.notleader == False and msg.messageId == self.msgId:
                     print("recieved reply to last sent message") #debug
-                    print(msg.messageId)
+                    if not msg.success:
+                        print("value not in store")
+                    else:
+                        if isinstance(msg, GetReply):
+                            print("value:", msg.value)
+                        if isinstance(msg, PutReply):
+                            print("successfully stored")
                     SEND_SUCCESS = True
                 if msg.notleader == True and msg.messageId == self.msgId and SEND_SUCCESS == False:
                     print("responder not leader") #debug
