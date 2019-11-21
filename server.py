@@ -71,6 +71,7 @@ class Server:
             await self.enter_leader_state()
         else:
             await self.enter_follower_state()
+        self.print_log()
 
     # methods for sending and resending messages
     async def message_resender(self, msg: Message, id: int, timeout: float=Config.RESEND_TIMEOUT, try_limit: int=Config.TRY_LIMIT) -> None: #TO BE DETERMINED: Indefinitely retry or not?
