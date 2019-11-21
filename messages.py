@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import Generator, Optional, TYPE_CHECKING
+from typing import Generator, Optional, List, TYPE_CHECKING
 if TYPE_CHECKING:
     from log import LogItem
     from server import Server
