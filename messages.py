@@ -111,7 +111,7 @@ class GetReply(Message):
         self.leaderId = leaderId
         self.success = success
         self.value = value
-    def handle(self, client) -> None:
+    async def handle(self, client) -> None:
         client.get_reply_handler(self)
 
 class PutReply(Message):
@@ -121,7 +121,7 @@ class PutReply(Message):
         self.notleader = notleader
         self.leaderId = leaderId
         self.success = success
-    def handle(self, client) -> None:
+    async def handle(self, client) -> None:
         client.put_reply_handler(self)
 
 if __name__ == "__main__":

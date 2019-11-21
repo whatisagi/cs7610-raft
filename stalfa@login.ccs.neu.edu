@@ -10,9 +10,9 @@ from config import Config
 from connection import ClientConnection
 from messages import *
 
-DELAY = 3               # client timeout delay (in seconds)
-NUM_SERVERS = int(sys.argv[1])  # total number of servers
-CHOOSE_RANDOM_LEADER = True     # flag telling client to randomly choose new leader
+DELAY = 3           # client timeout delay (in seconds)
+NUM_SERVERS = 0     # total number of servers
+CHOOSE_RANDOM_LEADER = True # flag telling client to randomly choose new leader
 SEND_NEW = True         # flag telling client to send a new instruction
 SEND_SUCCESS = False    # flag telling client that last message was received by leader
 
@@ -23,8 +23,7 @@ class Client:
         self.msgId = 0
         self.sendQ = queue.Queue()
         self.recQ = queue.Queue()
-        config = Config()
-        self._conn = ClientConnection(config)
+        self._conn = ClientConnection()
         self._loop = asyncio.get_event_loop()
         self._id = self._conn.client_id
     
@@ -41,34 +40,27 @@ class Client:
 
     async def tryInstruction(self):
         print("in sendInstruction") #debug
-        #sendHandle = asyncio.Handle()
-        global SEND_SUCCESS
-        global SEND_NEW
-        global DELAY
+        sendHandle = asyncio.Handle()
         while True:
             await asyncio.sleep(1)
             if not self.sendQ.empty() and SEND_NEW:
+                print("sendQ not empty") #debug
                 msg_to_server = self.sendQ.get()
+                msg_to_server.handle(self) #debug
+                sendHandle = self._loop.call_later(DELAY, sendInstruction, msg_to_server)
                 SEND_NEW = False
-            if not SEND_NEW:
-                await asyncio.sleep(DELAY)
-                if not SEND_SUCCESS:
-                    await self.sendInstruction(msg_to_server)
-            if SEND_SUCCESS:
+            if SEND_SUCCESS == True:
                 SEND_SUCCESS = False
+                sendHandle.cancel()
                 SEND_NEW = True
 
-    async def sendInstruction(self, instruction):
-        global NUM_SERVERS
-        global CHOOSE_RANDOM_LEADER
+    def sendInstruction(self, instruction):
         if CHOOSE_RANDOM_LEADER:
-            print("choosing random leader") #debug
             self.leader = (self.leader + 1) % NUM_SERVERS
-        print("leader: ", self.leader) #debug
         self.msgId = self.msgId + 1
-        instruction.messageId = self.msgId
-        await instruction.handle(self) #debug
-        await self._conn.send_message_to_server(instruction, self.leader)
+        instruction.id = self.msgId
+        # send instruction to current leader
+        pass
 
     def test_handler(self, msg):
         print(self._id, ':', msg)
@@ -76,11 +68,11 @@ class Client:
     def get_reply_handler(self, msg):
         pass
 
-    async def get_handler(self, msg):
-        print(self._id, ": get(", msg.key, ") , id: ", msg.messageId)
+    def get_handler(self, msg):
+        print(self._id, ':', msg)
 
-    async def put_handler(self, msg):
-        print(self._id, ": put(", msg.key, ',', msg.value, ") , id: ", msg.messageId)
+    def put_handler(self, msg):
+        print(self._id, ": put(", msg.key, ',', msg.value, ')')
 
     def put_reply_handler(self, msg):
         pass
@@ -99,44 +91,33 @@ class Client:
         print("in input instruction") # debug
         async for line in Client.generator(self, self._loop, sys.stdin):
             input = line.split()
-            if len(input) <= 0:
-                print("bad instruction")
-            elif input[0] == "put":
+            if input[0] == "put":
                 if len(input) != 3:
-                    pass
+                    print("bad instruction")
                 else:
                     msg = Put(input[1], input[2])
-                    await msg.handle(self) #debug
+                    msg.handle(self) #debug
                     self.sendQ.put(msg)
             elif input[0] == 'get':
                 if len(input) != 2:
                     print("bad instruction")
                 else: 
                     msg = Get(input[1])
-                    await msg.handle(self) #debug
+                    msg.handle(self) #debug
                     self.sendQ.put(msg)
             else: print("bad instruction")
 
 
     async def server_handler(self):
-        print("I'm Client", self._id) #debug
-        global SEND_SUCCESS
-        global CHOOSE_RANDOM_LEADER
+        print("I'm Client", self._id)
         while True:
             msg = await self._conn.receive_message_from_server()
-            if not isinstance(msg, Message):
-                print("received non-message")
-            else:
-                print("received message: id=", msg.messageId) #debug
-                #await msg.handle(self) #debug
-                if msg.notleader == False and msg.messageId == self.msgId:
-                    print("recieved reply to last sent message") #debug
-                    print(msg.messageId)
-                    SEND_SUCCESS = True
-                if msg.notleader == True and msg.messageId == self.msgId and SEND_SUCCESS == False:
-                    print("responder not leader") #debug
-                    CHOOSE_RANDOM_LEADER = False
-                    self.leader = msg.leaderId
+            msg.handle(self) #debug
+            if msg.notleader == False and msg.id == self.msgId:
+                SEND_SUCCESS = True
+            if msg.notleader == True and msg.id == self.msgId and SendSuccess == False:
+                CHOOSE_RANDOM_LEADER = False
+                self.leader = msg.leaderID
 
     def run(self):
         with self._conn:
@@ -154,8 +135,9 @@ class Client:
 
 
 # program is started with call to 
-# python3 client.py <total number of servers>
+# python3 client.py --servers=<total number of servers>
 
 if __name__ == "__main__":
+    NUM_SERVERS = argv.servers
     client = Client()
     client.run()
