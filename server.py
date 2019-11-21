@@ -274,11 +274,11 @@ class Server:
             t.cancel()
         for t in self._message_resend_timer.values():
             t.cancel()
-        self._apply_notifier.set()
+        if self._apply_notifier is not None:
+            self._apply_notifier.set()
         await asyncio.sleep(0)
         self._heartbeat_timer = []
         self._message_resend_timer = {}
-        self._apply_notifier = {}
 
     async def enter_follower_state(self) -> None:
         await self.exit_current_state()
