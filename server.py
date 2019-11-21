@@ -251,7 +251,7 @@ class Server:
 
         # waiting for the entry to be committed
         # but it may return before really committed when a leader turns into a follwer
-        await self._apply_notifier
+        await self._apply_notifier.wait()
         return self.commitIndex >= index
 
     def print_log(self) -> None:
