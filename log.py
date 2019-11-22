@@ -4,7 +4,7 @@ from typing import List, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from server import Server
 
-__all__ = ["LogItem", "GetOp", "PutOp", "NoOp"]
+__all__ = ["LogItem", "GetOp", "PutOp", "NoOp", "ConfigOp"]
 
 class LogItem:
     __slots__ = ["term", "command"]
@@ -45,7 +45,7 @@ class NoOp(LogItem):
         return "(nop,{})".format(self.term)
 
 class ConfigOp(LogItem):
-    def __init__(self, term: int, config: List[int], new_config: List[int]=None) -> None:
+    def __init__(self, term: int, config: List[int], new_config: Optional[List[int]]=None) -> None:
         super().__init__(term, "config")
         self.config = config
         self.new_config = new_config
