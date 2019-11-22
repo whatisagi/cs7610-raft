@@ -44,7 +44,7 @@ class State(enum.Enum):
     leader = "Leader"
 
 class Server:
-    __slots__ = ["_recovery", "_conn", "_id", "_server_num", "_loop", "_storage", "_voted_for_me", "_message_resend_timer", "_election_timer", "_heartbeat_timer", "_apply_notifier",
+    __slots__ = ["_recovery", "_conn", "_id", "_server_num", "_loop", "_storage", "_voted_for_me", "_message_sent", "_message_resend_timer", "_election_timer", "_heartbeat_timer", "_apply_notifier",
         "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex", "state", "stateMachine", "serverConfig", "serverNewConfig"]
 
     # methods for initialization
@@ -55,7 +55,8 @@ class Server:
         self._server_num = len(config.SERVER_NAMES)
         self._loop = asyncio.get_event_loop()
         self._storage = storage
-        self._voted_for_me: Set[int] = set()
+        self._voted_for_me: Set[int] = {}
+        self._message_sent: Dict[int, Message] = {}
         self._message_resend_timer: Dict[int, asyncio.Task] = {}
         self._election_timer: Optional[asyncio.Task] = None
         self._heartbeat_timer: List[asyncio.Task] = []
@@ -79,18 +80,19 @@ class Server:
         self.print_log()
 
     # methods for sending and resending messages
-    async def message_resender(self, msg: Message, id: int, timeout: float=Config.RESEND_TIMEOUT, try_limit: int=Config.TRY_LIMIT) -> None: #TO BE DETERMINED: Indefinitely retry or not?
+    async def message_resender(self, msg_id: int, id: int, timeout: float=Config.RESEND_TIMEOUT, try_limit: int=Config.TRY_LIMIT) -> None: #TO BE DETERMINED: Indefinitely retry or not?
         try:
             for _ in range(try_limit):
                 await asyncio.sleep(timeout)
-                await self._conn.send_message_to_server(msg, id)
+                await self._conn.send_message_to_server(self._message_sent[msg_id], id)
         except asyncio.CancelledError:
             pass
 
     async def message_sender(self, msg: Message, id: int, resend: bool=True) -> None:
+        self._message_sent[msg.messageId] = msg
         await self._conn.send_message_to_server(msg, id)
         if resend:
-            self._message_resend_timer[msg.messageId] = self._loop.create_task(self.message_resender(msg, id))
+            self._message_resend_timer[msg.messageId] = self._loop.create_task(self.message_resender(msg.messageId, id))
 
     # methods for sending heartbeats
     async def heartbeat_sender(self, id: int) -> None:
@@ -185,25 +187,27 @@ class Server:
 
             print("Received AppendEntryReply from Server {} for term {}, {}".format(msg.senderId, msg.term, "success" if msg.success else "fail"))
             if msg.success:
-                self.matchIndex[msg.senderId] = self.nextIndex[msg.senderId]
-                self.nextIndex[msg.senderId] += 1
+                original_msg = self._message_sent[msg.messageId]
+                if original_msg.prevLogIndex + len(original_msg.entry) > self.matchIndex[msg.senderId]:
+                    self.matchIndex[msg.senderId] = original_msg.prevLogIndex + len(original_msg.entry)
+                    self.nextIndex[msg.senderId] = self.matchIndex[msg.senderId] + 1
 
-                # update commitIndex and apply log entries
-                N = self.matchIndex[msg.senderId]
-                while N > self.commitIndex and self.log[N].term == self.currentTerm:
-                    count = len([1 for id in range(self._server_num) if id != self._id and id in self.serverConfig and self.matchIndex[id] >= N])
-                    if count+1 > len(self.serverConfig) // 2:
-                        success = True
-                        if self.serverNewConfig is not None:
-                            count = len([1 for id in range(self._server_num) if id != self._id and id in self.serverNewConfig and self.matchIndex[id] >= N])
-                            if count+1 <= len(self.serverNewConfig) // 2:
-                                success = False
-                        if success:
-                            self.commitIndex = N
-                            self.apply_entries()
-                            self.print_log()
-                            break
-                    N -= 1
+                    # update commitIndex and apply log entries
+                    N = self.matchIndex[msg.senderId]
+                    while N > self.commitIndex and self.log[N].term == self.currentTerm:
+                        count = len([1 for id in range(self._server_num) if id != self._id and id in self.serverConfig and self.matchIndex[id] >= N])
+                        if count+1 > len(self.serverConfig) // 2:
+                            success = True
+                            if self.serverNewConfig is not None:
+                                count = len([1 for id in range(self._server_num) if id != self._id and id in self.serverNewConfig and self.matchIndex[id] >= N])
+                                if count+1 <= len(self.serverNewConfig) // 2:
+                                    success = False
+                            if success:
+                                self.commitIndex = N
+                                self.apply_entries()
+                                self.print_log()
+                                break
+                        N -= 1
             else:
                 self.nextIndex[msg.senderId] -= 1
             
