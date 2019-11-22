@@ -3,6 +3,7 @@
 import asyncio
 import socket
 import pickle
+import random
 
 from config import Config
 
@@ -151,10 +152,12 @@ class ServerConnection:
         data = await self._server_to_client_conn.receive_data()
         return pickle.loads(data)
 
-    def send_message_to_server(self, msg, server_id):
+    async def send_message_to_server(self, msg, server_id):
         data = pickle.dumps(msg)
-        return self._server_to_server_conn.send_data(data, server_id)
-    
+        await asyncio.sleep(Config.TO_SERVER_DELAY[server_id])
+        if random.random() > Config.TO_SERVER_LOST[server_id]:
+            await self._server_to_server_conn.send_data(data, server_id)
+
     def send_message_to_client(self, msg, client_id):
         data = pickle.dumps(msg)
         return self._server_to_client_conn.send_data(data, client_id)
