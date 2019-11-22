@@ -79,11 +79,12 @@ class Client:
         global ADD_SUCCESS
         global ADD_NEW
         global DELAY
+        global CHOOSE_RANDOM_LEADER
         while True:
             await asyncio.sleep(1)
             if not self.addQ.empty() and ADD_NEW:
                 msg_to_server = self.addQ.get()
-                CHCHOOSE_RANDOM_LEADER = False
+                CHOOSE_RANDOM_LEADER = False
                 await self.sendAddServers(msg_to_server)
                 ADD_NEW = False
             if not ADD_NEW:
@@ -178,6 +179,7 @@ class Client:
         global SEND_SUCCESS
         global CHOOSE_RANDOM_LEADER
         global ALL_SENT_MESSAGES
+        global ADD_SUCCESS
         while True:
             msg = await self._conn.receive_message_from_server()
             #await msg.handle(self) #debug
