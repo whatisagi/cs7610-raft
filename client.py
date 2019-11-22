@@ -64,6 +64,7 @@ class Client:
         if CHOOSE_RANDOM_LEADER:
             print("choosing random leader") #debug
             self.leader = (self.leader + 1) % NUM_SERVERS
+        CHOOSE_RANDOM_LEADER = True
         print("leader: ", self.leader) #debug
         self.msgId = self.msgId + 1
         instruction.messageId = self.msgId
@@ -105,7 +106,7 @@ class Client:
                 if len(input) != 3:
                     pass
                 else:
-                    msg = Put(input[1], input[2])
+                    msg = Put(input[1], int(input[2]))
                     await msg.handle(self) #debug
                     self.sendQ.put(msg)
             elif input[0] == 'get':
@@ -131,12 +132,23 @@ class Client:
                 #await msg.handle(self) #debug
                 if msg.notleader == False and msg.messageId == self.msgId:
                     print("recieved reply to last sent message") #debug
-                    print(msg.messageId)
+                    if not msg.success:
+                        print("value not in store")
+                    else:
+                        if isinstance(msg, GetReply):
+                            print("value:", msg.value)
+                        if isinstance(msg, PutReply):
+                            print("successfully stored")
                     SEND_SUCCESS = True
                 if msg.notleader == True and msg.messageId == self.msgId and SEND_SUCCESS == False:
                     print("responder not leader") #debug
-                    CHOOSE_RANDOM_LEADER = False
-                    self.leader = msg.leaderId
+                    if msg.leaderId is None:
+                        print("msg.leaderId is None")
+                        CHOOSE_RANDOM_LEADER = True
+                    else:
+                        print("msg.leaderId is not None")
+                        CHOOSE_RANDOM_LEADER = False
+                        self.leader = msg.leaderId
 
     def run(self):
         with self._conn:

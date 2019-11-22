@@ -315,8 +315,13 @@ class Server:
                 self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
         
         # not really needed; for testing mainly
-        op = NoOp(self.currentTerm)
-        await self.op_handler(op)
+        self.log.append(NoOp(self.currentTerm))
+        index = len(self.log)-1
+        for id in range(self._server_num):
+            if id != self._id and id in self.serverConfig and self.nextIndex[id] <= index:
+                msg = AppendEntry(self.currentTerm, self._id, self.nextIndex[id]-1, self.log[self.nextIndex[id]-1].term, self.log[self.nextIndex[id]], self.commitIndex)
+                await self.message_sender(msg, id)
+        
 
     # methods for managing election timer
     async def election_timeout(self) -> None:
