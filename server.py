@@ -188,8 +188,8 @@ class Server:
             print("Received AppendEntryReply from Server {} for term {}, {}".format(msg.senderId, msg.term, "success" if msg.success else "fail"))
             if msg.success:
                 original_msg = self._message_sent[msg.messageId]
-                if original_msg.prevLogIndex + len(original_msg.entry) > self.matchIndex[msg.senderId]:
-                    self.matchIndex[msg.senderId] = original_msg.prevLogIndex + len(original_msg.entry)
+                if original_msg.prevLogIndex + 1 > self.matchIndex[msg.senderId]:
+                    self.matchIndex[msg.senderId] = original_msg.prevLogIndex + 1
                     self.nextIndex[msg.senderId] = self.matchIndex[msg.senderId] + 1
 
                     # update commitIndex and apply log entries
