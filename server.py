@@ -245,7 +245,7 @@ class Server:
             else:
                 new_config = self.serverConfig.union(msg.servers)
                 for id in range(self._server_num):
-                    if id != self._id and id in self.serverNewConfig and id not in self.serverConfig:
+                    if id != self._id and id in new_config and id not in self.serverConfig:
                         self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
                 op = ConfigOp(self.currentTerm, self.serverConfig, new_config)
                 print("Starting joint consensus {}".format(op))
