@@ -154,8 +154,8 @@ class ServerConnection:
 
     async def send_message_to_server(self, msg, server_id):
         data = pickle.dumps(msg)
-        await asyncio.sleep(Config.TO_SERVER_DELAY[server_id])
-        if random.random() > Config.TO_SERVER_LOST[server_id]:
+        await asyncio.sleep(Config.SEND_TO_SERVER_DELAY[server_id])
+        if random.random() > Config.SEND_TO_SERVER_LOST[server_id]:
             await self._server_to_server_conn.send_data(data, server_id)
 
     def send_message_to_client(self, msg, client_id):
