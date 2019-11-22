@@ -11,7 +11,6 @@ from contextlib import suppress
 from config import Config
 from connection import ClientConnection
 from messages import *
-from messages import AddServers, AddReply
 
 DELAY = 3               # client timeout delay (in seconds)
 CHOOSE_RANDOM_LEADER = True     # flag telling client to randomly choose new leader
@@ -66,7 +65,7 @@ class Client:
         global ALL_SENT_MESSAGES
         if CHOOSE_RANDOM_LEADER:
             #print("choosing random leader (get/put)") #debug
-            self.leader = random.choice(self.config.INIT_SERVER_CONFIG)
+            self.leader = random.choice(list(self.config.INIT_SERVER_CONFIG))
         CHOOSE_RANDOM_LEADER = True
         #print("sending get/put to leader: ", self.leader) #debug
         self.msgId = self.msgId + 1
@@ -100,7 +99,7 @@ class Client:
         global ALL_SENT_MESSAGES
         if CHOOSE_RANDOM_LEADER:
             #print("choosing random leader (add)") #debug
-            self.leader = random.choice(self.config.INIT_SERVER_CONFIG)
+            self.leader = random.choice(list(self.config.INIT_SERVER_CONFIG))
         CHOOSE_RANDOM_LEADER = True
         print("sending add message to leader: ", self.leader) #debug
         self.msgId = self.msgId + 1
@@ -169,7 +168,7 @@ class Client:
                 new_servers = []
                 for i in range (1, len(input)):
                     new_servers = new_servers + [int(input[i])]                    
-                msg = AddServers(new_servers)
+                msg = AddServers(set(new_servers))
                 #await msg.handle(self) #debug
                 self.addQ.put(msg)
             else: print("bad instruction")
@@ -199,8 +198,8 @@ class Client:
                     if msg.success:
                         #print("successfully stored (",sent_message.key, ',', sent_message.value, ")") #debug
                         SEND_SUCCESS = True # we retry until key-value pair is stored
-            if isinstance(msg, AddReply) and msg.messageId == self.addmsgId and not msg.notleader:
-                #print("received reply to message ", msg.messageId) #debug
+            if isinstance(msg, AddServersReply) and msg.messageId == self.addmsgId and not msg.notleader:
+                print("received reply to message ", msg.messageId) #debug
                 #if not msg.success:
                     #print("servers not added, retrying")
                 if msg.success:
