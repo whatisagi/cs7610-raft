@@ -247,7 +247,9 @@ class Server:
     async def add_servers(self, msg: AddServers) -> None:
         reply_msg = None
         if self.state == State.leader:
-            if all(new_server in self.serverConfig for new_server in msg.servers):
+            if self.serverNewConfig is not None: # in joint consensus, immediately return fail
+                reply_msg = AddServersReply(msg.messageId, False, self._id, False, self.serverConfig)
+            elif all(new_server in self.serverConfig for new_server in msg.servers):
                 reply_msg = AddServersReply(msg.messageId, False, self._id, True, self.serverConfig)
             else:
                 new_config = self.serverConfig.union(msg.servers)
