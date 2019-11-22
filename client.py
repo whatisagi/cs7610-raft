@@ -203,7 +203,7 @@ class Client:
                 #if not msg.success:
                     #print("servers not added, retrying")
                 if msg.success:
-                    #print("servers successfully added")
+                    print("servers successfully added")
                     ADD_SUCCESS = True # we retry until servers are added
             if (msg.messageId == self.msgId or msg.messageId == self.addmsgId) and msg.notleader and (not SEND_SUCCESS or not ADD_SUCCESS):
                 #print("responder not leader") #debug
