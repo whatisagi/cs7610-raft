@@ -133,8 +133,8 @@ class Server:
             print("Received RequestVoteReply from Server {}, {}granted".format(msg.senderId, "" if msg.voteGranted else "not "))
             if msg.voteGranted:
                 self._voted_for_me.add(msg.senderId)
-                if len(self._voted_for_me & self.serverConfig)+1 > len(self.serverConfig) // 2:
-                    if self.serverNewConfig is None or len(self._voted_for_me & self.serverNewConfig)+1 > len(self.serverNewConfig) // 2:
+                if len(self._voted_for_me & self.serverConfig) + (1 if self._id in self.serverConfig else 0) > len(self.serverConfig) // 2:
+                    if self.serverNewConfig is None or len(self._voted_for_me & self.serverNewConfig) + (1 if self._id in self.serverNewConfig else 0) > len(self.serverNewConfig) // 2:
                         await self.enter_leader_state()
 
     async def append_entry_handler(self, msg: AppendEntry) -> None:
@@ -196,11 +196,11 @@ class Server:
                     N = self.matchIndex[msg.senderId]
                     while N > self.commitIndex and self.log[N].term == self.currentTerm:
                         count = len([1 for id in range(self._server_num) if id != self._id and id in self.serverConfig and self.matchIndex[id] >= N])
-                        if count+1 > len(self.serverConfig) // 2:
+                        if count + (1 if self._id in self.serverConfig else 0) > len(self.serverConfig) // 2:
                             success = True
                             if self.serverNewConfig is not None:
                                 count = len([1 for id in range(self._server_num) if id != self._id and id in self.serverNewConfig and self.matchIndex[id] >= N])
-                                if count+1 <= len(self.serverNewConfig) // 2:
+                                if count + (1 if self._id in self.serverNewConfig else 0) <= len(self.serverNewConfig) // 2:
                                     success = False
                             if success:
                                 self.commitIndex = N
