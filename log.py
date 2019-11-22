@@ -4,7 +4,7 @@ from typing import List, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from server import Server
 
-__all__ = ["LogItem", "GetOp", "PutOp", "NoOp"]
+__all__ = ["LogItem", "GetOp", "PutOp", "NoOp", "ConfigOp"]
 
 class LogItem:
     __slots__ = ["term", "command"]
