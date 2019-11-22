@@ -97,11 +97,11 @@ class Put(Message):
 
 class AddServers(Message):
     __slots__ = ["servers"]
-    def __init__(self, servers: List[int]) -> None:
+    def __init__(self, servers: Set) -> None:
         super().__init__()
         self.servers = servers
     async def handle(self, server: "Server") -> None:
-        await server.add_servers_handler(self)
+        await server.add_handler(self)
 
 class GetReply(Message):
     __slots__ = ["notleader", "leaderId", "success", "value"]
@@ -123,6 +123,16 @@ class PutReply(Message):
         self.success = success
     async def handle(self, client) -> None:
         client.put_reply_handler(self)
+
+class AddReply(Message):
+    __slots__ = ["notleader", "leaderId", "success"]
+    def __init__(self, messageId: int, notleader: bool, leaderId: Optional[int], success: bool) -> None:
+        self.messageId = messageId
+        self.notleader = notleader
+        self.leaderId = leaderId
+        self.success = success
+    async def handle(self, client) -> None:
+        client.add_reply_handler(self)
 
 if __name__ == "__main__":
     import pickle
