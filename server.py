@@ -119,7 +119,7 @@ class Server:
                     self.reset_election_timer()
         
         if msg.term >= self.currentTerm:
-            print("Received RequestVote from Server {} for term {} with ({},{}), {}grant".format(msg.candidateId, msg.term, msg.lastLogTerm, msg.lastLogIndex, "" if voteGranted else "not "))
+            print("S{}: Received RequestVote from S{} for term {} with ({},{}), {}grant".format(self._id, msg.candidateId, msg.term, msg.lastLogTerm, msg.lastLogIndex, "" if voteGranted else "not "))
         self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before voting
         reply_msg = RequestVoteReply(msg.messageId, self.currentTerm, voteGranted, self._id)
         await self.message_sender(reply_msg, msg.candidateId, False)
@@ -130,7 +130,7 @@ class Server:
             self._message_resend_timer[msg.messageId].cancel()
             del self._message_resend_timer[msg.messageId]
 
-            print("Received RequestVoteReply from Server {}, {}granted".format(msg.senderId, "" if msg.voteGranted else "not "))
+            print("S{}: Received RequestVoteReply from S{}, {}granted".format(self._id, msg.senderId, "" if msg.voteGranted else "not "))
             if msg.voteGranted:
                 self._voted_for_me.add(msg.senderId)
                 if len(self._voted_for_me & self.serverConfig) + (1 if self._id in self.serverConfig else 0) > len(self.serverConfig) // 2:
@@ -149,7 +149,7 @@ class Server:
             if msg.entry is None:
                 # dealing with heartbeat
                 self.reset_election_timer()
-                print("Received heartbeat from Server {} for term {}".format(msg.leaderId, msg.term))
+                print("S{}: Received heartbeat from S{} for term {}".format(self._id, msg.leaderId, msg.term))
             elif msg.prevLogIndex <= len(self.log)-1 and self.log[msg.prevLogIndex].term == msg.prevLogTerm:
                 success = True
                 # remove the following log entries with different term
@@ -173,7 +173,7 @@ class Server:
                 self.apply_entries()
         
         if msg.term >= self.currentTerm and msg.entry is not None:
-            print("Received AppendEntry from Server {} for term {} with ({},{},{},{}), {}".format(msg.leaderId, msg.term, msg.prevLogIndex, msg.prevLogTerm, msg.entry, msg.leaderCommit, "success" if success else "fail"))
+            print("S{}: Received AppendEntry from S{} for term {} with ({},{},{},{}), {}".format(self._id, msg.leaderId, msg.term, msg.prevLogIndex, msg.prevLogTerm, msg.entry, msg.leaderCommit, "success" if success else "fail"))
         if to_print_log:
             self.print_log()
         reply_msg = AppendEntryReply(msg.messageId, self.currentTerm, success, self._id)
@@ -185,7 +185,7 @@ class Server:
             self._message_resend_timer[msg.messageId].cancel()
             del self._message_resend_timer[msg.messageId]
 
-            print("Received AppendEntryReply from Server {} for term {}, {}".format(msg.senderId, msg.term, "success" if msg.success else "fail"))
+            print("S{}: Received AppendEntryReply from S{} for term {}, {}".format(self._id, msg.senderId, msg.term, "success" if msg.success else "fail"))
             if msg.success:
                 original_msg = self._message_sent[msg.messageId]
                 if original_msg.prevLogIndex + 1 > self.matchIndex[msg.senderId]:
@@ -220,7 +220,7 @@ class Server:
         reply_msg = None
         if self.state == State.leader:
             op = GetOp(self.currentTerm, msg.key)
-            print("Received {} from client".format(op))
+            print("S{}: Received {} from client".format(self._id, op))
             commit_success = await self.op_handler(op)
             if commit_success: # successfully commit and apply the log entry
                 reply_msg = GetReply(msg.messageId, False, self._id, True, op.handle(self))
@@ -232,7 +232,7 @@ class Server:
         reply_msg = None
         if self.state == State.leader:
             op = PutOp(self.currentTerm, msg.key, msg.value)
-            print("Received {} from client".format(op))
+            print("S{}: Received {} from client".format(self._id, op))
             commit_success = await self.op_handler(op)
             if commit_success: # successfully commit and apply the log entry
                 reply_msg = PutReply(msg.messageId, False, self._id, True)
@@ -257,17 +257,17 @@ class Server:
                     if id != self._id and id in new_config and id not in self.serverConfig:
                         self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
                 op = ConfigOp(self.currentTerm, self.serverConfig, new_config)
-                print("Starting joint consensus {}".format(op))
+                print("S{}: Starting joint consensus {}".format(self._id, op))
                 commit_success = await self.op_handler(op)
                 if commit_success:
-                    print("Joint consensus committed")
+                    print("S{}: Joint consensus committed".format(self._id))
                     await asyncio.sleep(Config.SLEEP_BETWEEN_JOINT_CONSENSUS)
                     if self.state == State.leader:
                         op = ConfigOp(self.currentTerm, new_config)
-                        print("Starting new configuration: {}".format(op))
+                        print("S{}: Starting new configuration: {}".format(self._id, op))
                         commit_success = await self.op_handler(op)
                         if commit_success:
-                            print("New configuration committed")
+                            print("S{}: New configuration committed".format(self._id))
                             reply_msg = AddServersReply(msg.messageId, False, self._id, True, self.serverConfig)
         if reply_msg is None:
             reply_msg = AddServersReply(msg.messageId, True, self.votedFor, False, self.serverConfig)
@@ -319,7 +319,7 @@ class Server:
             print(self.log[-1])
         else:
             print()
-        print(self.stateMachine)
+        #print(self.stateMachine)
 
     # methods for changing state
     async def exit_current_state(self) -> None:
