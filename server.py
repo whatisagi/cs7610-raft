@@ -17,17 +17,19 @@ __all__ = ["Server"]
 class Storage:
     __slots__ = ["_id"]
 
-    def read(self, id: int) -> Tuple[int, Optional[int], List[LogItem]]:
+    def read(self, id: int, recovery: bool) -> Tuple[int, Optional[int], List[LogItem]]:
         self._id = id
-        try:
-            with open("server"+str(id)+".storage", "rb") as f:
-                currentTerm: int = pickle.load(f)
-                votedFor: Optional[int] = pickle.load(f)
-                log: List[LogItem] = pickle.load(f)
-        except OSError:
-            currentTerm: int = 0
-            votedFor: Optional[int] = 0
-            log: List[LogItem] = [NoOp(0)]
+        currentTerm: int = 0
+        votedFor: Optional[int] = 0
+        log: List[LogItem] = [NoOp(0)]
+        if recovery:
+            try:
+                with open("server"+str(id)+".storage", "rb") as f:
+                    currentTerm: int = pickle.load(f)
+                    votedFor: Optional[int] = pickle.load(f)
+                    log: List[LogItem] = pickle.load(f)
+            except OSError:
+                pass
         return (currentTerm, votedFor, log)
 
     def store(self, currentTerm: int, votedFor: Optional[int], log: List[LogItem]) -> None:
@@ -42,11 +44,12 @@ class State(enum.Enum):
     leader = "Leader"
 
 class Server:
-    __slots__ = ["_conn", "_id", "_server_num", "_loop", "_storage", "_voted_for_me", "_message_resend_timer", "_election_timer", "_heartbeat_timer", "_apply_notifier",
+    __slots__ = ["_recovery", "_conn", "_id", "_server_num", "_loop", "_storage", "_voted_for_me", "_message_resend_timer", "_election_timer", "_heartbeat_timer", "_apply_notifier",
         "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex", "state", "stateMachine", "serverConfig", "serverNewConfig"]
 
     # methods for initialization
-    def __init__(self, config: Config=Config, storage: Storage=Storage()) -> None:
+    def __init__(self, config: Config=Config, storage: Storage=Storage(), recovery: bool=False) -> None:
+        self._recovery = recovery
         self._conn = ServerConnection(config)
         self._id: int = self._conn.server_id
         self._server_num = len(config.SERVER_NAMES)
@@ -59,7 +62,7 @@ class Server:
         self._apply_notifier: Optional[asyncio.Event] = None
 
     async def init(self) -> None:
-        self.currentTerm, self.votedFor, self.log = self._storage.read(self._id)
+        self.currentTerm, self.votedFor, self.log = self._storage.read(self._id, self._recovery)
         self.serverConfig = Config.INIT_SERVER_CONFIG
         self.serverNewConfig = None
         self.update_config()
@@ -422,5 +425,10 @@ class Server:
             self._loop.close()
 
 if __name__ == "__main__":
-    server = Server()
+    import sys
+    if len(sys.argv) >= 2:
+        recovery = "-r" in sys.argv
+    else:
+        recovery = False
+    server = Server(recovery=recovery)
     server.run()
