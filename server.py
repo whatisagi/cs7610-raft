@@ -205,11 +205,7 @@ class Server:
             print("Received {} from client".format(op))
             commit_success = await self.op_handler(op)
             if commit_success: # successfully commit and apply the log entry
-                res = op.handle(self)
-                if res is not None: # key is in the state machine
-                    reply_msg = GetReply(msg.messageId, False, self._id, True, res)
-                else: # key is not in the state machine, fail
-                    reply_msg = GetReply(msg.messageId, False, self._id, False, None)
+                reply_msg = GetReply(msg.messageId, False, self._id, True, op.handle(self))
         if reply_msg is None: # not leader when replying
             reply_msg = GetReply(msg.messageId, True, self.votedFor, False, None)
         await self._conn.send_message_to_client(reply_msg, 0)

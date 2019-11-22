@@ -18,3 +18,4 @@ class Config:
     # for testing
     SLEEP_BETWEEN_JOINT_CONSENSUS = 0
     SENDING_NOP_LEADER = True
+    TO_SERVER_DELAY = []
