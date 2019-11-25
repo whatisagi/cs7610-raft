@@ -21,3 +21,4 @@ class Config:
     SLEEP_BETWEEN_JOINT_CONSENSUS = 0
     SEND_TO_SERVER_DELAY = [0,0,0,0,0,0]
     SEND_TO_SERVER_LOST = [0,0,0,0,0,0]
+    VERBOSE = True
