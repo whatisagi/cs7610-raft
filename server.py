@@ -44,7 +44,7 @@ class State(enum.Enum):
     leader = "Leader"
 
 class Server:
-    __slots__ = ["_recovery", "_conn", "_id", "_server_num", "_loop", "_storage", "_voted_for_me", "_message_sent", "_message_resend_timer", "_election_timer", "_heartbeat_timer", "_apply_notifier",
+    __slots__ = ["_recovery", "_conn", "_id", "_server_num", "_loop", "_storage", "_voted_for_me", "_message_sent", "_message_resend_timer", "_election_timer", "_heartbeat_timer", "_apply_notifier", "_add_servers_queue",
         "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex", "state", "stateMachine", "serverConfig", "serverNewConfig"]
 
     # methods for initialization
@@ -61,6 +61,7 @@ class Server:
         self._election_timer: Optional[asyncio.Task] = None
         self._heartbeat_timer: List[asyncio.Task] = []
         self._apply_notifier: Optional[asyncio.Event] = None
+        self._add_servers_queue = asyncio.Queue()
 
     async def init(self) -> None:
         self.currentTerm, self.votedFor, self.log = self._storage.read(self._id, self._recovery)
@@ -241,37 +242,37 @@ class Server:
         await self._conn.send_message_to_client(reply_msg, 0)
 
     async def add_servers_handler(self, msg: AddServers) -> None:
-        self._loop.create_task(self.add_servers(msg))
-    
+        await self._add_servers_queue.put(msg)
+
     # methods for membership changes
-    async def add_servers(self, msg: AddServers) -> None:
-        reply_msg = None
-        if self.state == State.leader:
-            if self.serverNewConfig is not None: # in joint consensus, immediately return fail
-                reply_msg = AddServersReply(msg.messageId, False, self._id, False, self.serverConfig)
-            elif all(new_server in self.serverConfig for new_server in msg.servers):
-                reply_msg = AddServersReply(msg.messageId, False, self._id, True, self.serverConfig)
-            else:
-                new_config = self.serverConfig.union(msg.servers)
-                for id in range(self._server_num):
-                    if id != self._id and id in new_config and id not in self.serverConfig:
-                        self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
-                op = ConfigOp(self.currentTerm, self.serverConfig, new_config)
-                print("S{}: Starting joint consensus {}".format(self._id, op))
-                commit_success = await self.op_handler(op)
-                if commit_success:
-                    print("S{}: Joint consensus committed".format(self._id))
-                    await asyncio.sleep(Config.SLEEP_BETWEEN_JOINT_CONSENSUS)
-                    if self.state == State.leader:
-                        op = ConfigOp(self.currentTerm, new_config)
-                        print("S{}: Starting new configuration: {}".format(self._id, op))
-                        commit_success = await self.op_handler(op)
-                        if commit_success:
-                            print("S{}: New configuration committed".format(self._id))
-                            reply_msg = AddServersReply(msg.messageId, False, self._id, True, self.serverConfig)
-        if reply_msg is None:
-            reply_msg = AddServersReply(msg.messageId, True, self.votedFor, False, self.serverConfig)
-        await self._conn.send_message_to_client(reply_msg, 0)
+    async def admin_handler(self) -> None:
+        while True:
+            msg = await self._add_servers_queue.get()
+            reply_msg = None
+            if self.state == State.leader:
+                if all(new_server in self.serverConfig for new_server in msg.servers):
+                    reply_msg = AddServersReply(msg.messageId, False, self._id, True, self.serverConfig)
+                else:
+                    new_config = self.serverConfig.union(msg.servers)
+                    for id in range(self._server_num):
+                        if id != self._id and id in new_config and id not in self.serverConfig and (self.serverNewConfig is None or id not in self.serverNewConfig):
+                            self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
+                    op = ConfigOp(self.currentTerm, self.serverConfig, new_config)
+                    print("S{}: Starting joint consensus {}".format(self._id, op))
+                    commit_success = await self.op_handler(op)
+                    if commit_success:
+                        print("S{}: Joint consensus committed".format(self._id))
+                        await asyncio.sleep(Config.SLEEP_BETWEEN_JOINT_CONSENSUS)
+                        if self.state == State.leader:
+                            op = ConfigOp(self.currentTerm, new_config)
+                            print("S{}: Starting new configuration: {}".format(self._id, op))
+                            commit_success = await self.op_handler(op)
+                            if commit_success:
+                                print("S{}: New configuration committed".format(self._id))
+                                reply_msg = AddServersReply(msg.messageId, False, self._id, True, self.serverConfig)
+            if reply_msg is None:
+                reply_msg = AddServersReply(msg.messageId, True, self.votedFor, False, self.serverConfig)
+            await self._conn.send_message_to_client(reply_msg, 0)
 
     def update_config(self) -> None:
         for op in self.log[::-1]:
@@ -408,6 +409,7 @@ class Server:
                 self._loop.create_task(self.init())
                 self._loop.create_task(self.server_handler())
                 self._loop.create_task(self.client_handler())
+                self._loop.create_task(self.admin_handler())
                 self._loop.run_forever()
         except (KeyboardInterrupt, SystemExit):
             #self._storage.store(self.currentTerm, self.votedFor, self.log)
