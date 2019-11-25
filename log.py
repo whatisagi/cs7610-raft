@@ -52,4 +52,7 @@ class ConfigOp(LogItem):
     def handle(self, server: "Server") -> None:
         pass
     def __str__(self) -> str:
-        return "({};{}, {})".format(self.config, self.new_config, self.term)
+        if self.new_config is None:
+            return "({}, {})".format(self.config, self.term)
+        else:
+            return "({};{}, {})".format(self.config, self.new_config, self.term)
