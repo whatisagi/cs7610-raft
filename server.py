@@ -259,6 +259,7 @@ class Server:
                 if all(new_server in self.serverConfig for new_server in msg.servers):
                     reply_msg = AddServersReply(msg.messageId, False, self._id, True, self.serverConfig)
                 else:
+                    await asyncio.sleep(Config.SLEEP_BEFORE_JOINT_CONSENSUE)
                     new_config = self.serverConfig.union(msg.servers)
                     for id in range(self._server_num):
                         if id != self._id and id in new_config and id not in self.serverConfig and (self.serverNewConfig is None or id not in self.serverNewConfig):

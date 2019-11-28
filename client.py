@@ -13,7 +13,7 @@ from config import Config
 from connection import ClientConnection
 from messages import *
 
-DELAY = 3                   # client timeout delay (in seconds)
+DELAY = 0.2                   # client timeout delay (in seconds)
 CHOOSE_RANDOM_LEADER = True # flag telling client to randomly choose new leader
 
 SEND_NEW = True         # flag telling client to send a new instruction
@@ -21,7 +21,7 @@ SEND_SUCCESS = False    # flag telling client that last message was received by 
 
 ADD_NEW = True      # flag telling client to add new servers
 ADD_SUCCESS = False # flag telling client that last requested servers were added
-ADD_DELAY = 6
+ADD_DELAY = 100
 
 ALL_SENT_MESSAGES = {}  # dictionary to store all sent messages, keyed by message ID
 
