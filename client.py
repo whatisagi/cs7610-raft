@@ -68,7 +68,7 @@ class Client:
         if CHOOSE_RANDOM_LEADER:
             self.leader = random.choice(list(self.config.INIT_SERVER_CONFIG))
         CHOOSE_RANDOM_LEADER = True
-        print("sending get/put message to leader: ", self.leader) #debug
+        print("                    trying server: ", self.leader) #debug
         self.msgId = self.msgId + 1
         instruction.messageId = self.msgId
         ALL_SENT_MESSAGES[self.msgId] = instruction
@@ -100,7 +100,7 @@ class Client:
         if CHOOSE_RANDOM_LEADER:
             self.leader = random.choice(list(self.config.INIT_SERVER_CONFIG))
         CHOOSE_RANDOM_LEADER = True
-        print("sending add message to leader: ", self.leader) #debug
+        print("                    trying server: ", self.leader) #debug
         self.msgId = self.msgId + 1
         self.addmsgId = self.msgId
         instruction.messageId = self.addmsgId
