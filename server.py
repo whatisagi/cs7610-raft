@@ -74,11 +74,11 @@ class Server:
         self.matchIndex: List[int] = [0 for i in range(self._server_num)]
         self.stateMachine: Dict[str, int] = {}
         if self.currentTerm == 0 and self._id == 0:
-            self.log: List[LogItem] = [NoOp(0), GetOp(0, 'x'), PutOp(0, 'x', 4), GetOp(0, 'x'), PutOp(0, 'y', 3), PutOp(0, 'x', 5), GetOp(0, 'x')]
             await self.enter_leader_state()
         else:
             await self.enter_follower_state()
-        self.print_log()
+        if Config.VERBOSE:
+            self.print_log()
 
     # methods for sending and resending messages
     async def message_resender(self, msg_id: int, id: int, timeout: float=Config.RESEND_TIMEOUT, try_limit: int=Config.TRY_LIMIT) -> None: #TO BE DETERMINED: Indefinitely retry or not?
@@ -119,7 +119,7 @@ class Server:
                     self.votedFor = msg.candidateId
                     self.reset_election_timer()
         
-        if msg.term >= self.currentTerm:
+        if Config.VERBOSE and msg.term >= self.currentTerm:
             print("S{}: Received RequestVote from S{} for term {} with ({},{}), {}grant".format(self._id, msg.candidateId, msg.term, msg.lastLogTerm, msg.lastLogIndex, "" if voteGranted else "not "))
         self._storage.store(self.currentTerm, self.votedFor, self.log) # persistent storage before voting
         reply_msg = RequestVoteReply(msg.messageId, self.currentTerm, voteGranted, self._id)
@@ -131,7 +131,8 @@ class Server:
             self._message_resend_timer[msg.messageId].cancel()
             del self._message_resend_timer[msg.messageId]
 
-            print("S{}: Received RequestVoteReply from S{}, {}granted".format(self._id, msg.senderId, "" if msg.voteGranted else "not "))
+            if Config.VERBOSE:
+                print("S{}: Received RequestVoteReply from S{}, {}granted".format(self._id, msg.senderId, "" if msg.voteGranted else "not "))
             if msg.voteGranted:
                 self._voted_for_me.add(msg.senderId)
                 if len(self._voted_for_me & self.serverConfig) + (1 if self._id in self.serverConfig else 0) > len(self.serverConfig) // 2:
@@ -150,7 +151,8 @@ class Server:
             if msg.entry is None:
                 # dealing with heartbeat
                 self.reset_election_timer()
-                print("S{}: Received heartbeat from S{} for term {}".format(self._id, msg.leaderId, msg.term))
+                if Config.VERBOSE:
+                    print("S{}: Received heartbeat from S{} for term {}".format(self._id, msg.leaderId, msg.term))
             elif msg.prevLogIndex <= len(self.log)-1 and self.log[msg.prevLogIndex].term == msg.prevLogTerm:
                 success = True
                 # remove the following log entries with different term
@@ -173,9 +175,9 @@ class Server:
                     to_print_log = True
                 self.apply_entries()
         
-        if msg.term >= self.currentTerm and msg.entry is not None:
+        if Config.VERBOSE and msg.term >= self.currentTerm and msg.entry is not None:
             print("S{}: Received AppendEntry from S{} for term {} with ({},{},{},{}), {}".format(self._id, msg.leaderId, msg.term, msg.prevLogIndex, msg.prevLogTerm, msg.entry, msg.leaderCommit, "success" if success else "fail"))
-        if to_print_log:
+        if Config.VERBOSE and to_print_log:
             self.print_log()
         reply_msg = AppendEntryReply(msg.messageId, self.currentTerm, success, self._id)
         await self.message_sender(reply_msg, msg.leaderId, False)
@@ -186,7 +188,8 @@ class Server:
             self._message_resend_timer[msg.messageId].cancel()
             del self._message_resend_timer[msg.messageId]
 
-            print("S{}: Received AppendEntryReply from S{} for term {}, {}".format(self._id, msg.senderId, msg.term, "success" if msg.success else "fail"))
+            if Config.VERBOSE:
+                print("S{}: Received AppendEntryReply from S{} for term {}, {}".format(self._id, msg.senderId, msg.term, "success" if msg.success else "fail"))
             if msg.success:
                 original_msg = self._message_sent[msg.messageId]
                 if original_msg.prevLogIndex + 1 > self.matchIndex[msg.senderId]:
@@ -206,7 +209,8 @@ class Server:
                             if success:
                                 self.commitIndex = N
                                 self.apply_entries()
-                                self.print_log()
+                                if Config.VERBOSE:
+                                    self.print_log()
                                 break
                         N -= 1
             else:
@@ -221,7 +225,8 @@ class Server:
         reply_msg = None
         if self.state == State.leader:
             op = GetOp(self.currentTerm, msg.key)
-            print("S{}: Received {} from client".format(self._id, op))
+            if Config.VERBOSE:
+                print("S{}: Received {} from client".format(self._id, op))
             commit_success = await self.op_handler(op)
             if commit_success: # successfully commit and apply the log entry
                 reply_msg = GetReply(msg.messageId, False, self._id, True, op.handle(self))
@@ -233,7 +238,8 @@ class Server:
         reply_msg = None
         if self.state == State.leader:
             op = PutOp(self.currentTerm, msg.key, msg.value)
-            print("S{}: Received {} from client".format(self._id, op))
+            if Config.VERBOSE:
+                print("S{}: Received {} from client".format(self._id, op))
             commit_success = await self.op_handler(op)
             if commit_success: # successfully commit and apply the log entry
                 reply_msg = PutReply(msg.messageId, False, self._id, True)
@@ -253,22 +259,23 @@ class Server:
                 if all(new_server in self.serverConfig for new_server in msg.servers):
                     reply_msg = AddServersReply(msg.messageId, False, self._id, True, self.serverConfig)
                 else:
+                    await asyncio.sleep(Config.SLEEP_BEFORE_JOINT_CONSENSUE)
                     new_config = self.serverConfig.union(msg.servers)
                     for id in range(self._server_num):
                         if id != self._id and id in new_config and id not in self.serverConfig and (self.serverNewConfig is None or id not in self.serverNewConfig):
                             self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
                     op = ConfigOp(self.currentTerm, self.serverConfig, new_config)
-                    print("S{}: Starting joint consensus {}".format(self._id, op))
+                    print("Server {}: Starting joint consensus {}".format(self._id, op))
                     commit_success = await self.op_handler(op)
                     if commit_success:
-                        print("S{}: Joint consensus committed".format(self._id))
+                        print("Server {}: Joint consensus committed".format(self._id))
                         await asyncio.sleep(Config.SLEEP_BETWEEN_JOINT_CONSENSUS)
                         if self.state == State.leader:
                             op = ConfigOp(self.currentTerm, new_config)
-                            print("S{}: Starting new configuration: {}".format(self._id, op))
+                            print("Server {}: Starting new configuration: {}".format(self._id, op))
                             commit_success = await self.op_handler(op)
                             if commit_success:
-                                print("S{}: New configuration committed".format(self._id))
+                                print("Server {}: New configuration committed".format(self._id))
                                 reply_msg = AddServersReply(msg.messageId, False, self._id, True, self.serverConfig)
             if reply_msg is None:
                 reply_msg = AddServersReply(msg.messageId, True, self.votedFor, False, self.serverConfig)
