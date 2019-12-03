@@ -293,27 +293,32 @@ class Server:
             
             if isinstance(msg, RemServer):
                 if self.state == State.leader:
-                    if msg.server not in self.serverConfig:
-                        reply_msg = RemServerReply(msg.messageId, False, self._id, True, self.serverConfig)
+                    op = NoOp(self.currentTerm)
+                    commit_success = await self.op_handler(op)
+                    if not commit_success:
+                        reply_msg = RemServerReply(msg.messageId, False, self.votedFor, False, None)
                     else:
-                        new_config = self.serverConfig
-                        new_config.remove(msg.server)
-                        op = ConfigOp(self.currentTerm, new_config)
-                        if Config.VERBOSE:
-                            print("S{}: Received {} from client".format(self._id, op))
-                        commit_success = await self.op_handler(op)
-                        if commit_success:
+                        if msg.server not in self.serverConfig:
                             reply_msg = RemServerReply(msg.messageId, False, self._id, True, self.serverConfig)
-                            #cancel current heartbeats to exclude removed server
-                            for t in self._heartbeat_timer:
-                                t.cancel()
-                            # then send out hearbeats immediately and indefinitely
-                            for id in range(self._server_num):
-                                if id != self._id and (id in self.serverConfig or (self.serverNewConfig is not None and id in self.serverNewConfig)):
-                                    self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
-                            # if I was removed, then become follower
-                            if msg.server == self._id:
-                                await self.enter_follower_state()
+                        else:
+                            new_config = self.serverConfig
+                            new_config.remove(msg.server)
+                            op = ConfigOp(self.currentTerm, new_config)
+                            if Config.VERBOSE:
+                                print("S{}: Received {} from client".format(self._id, op))
+                            commit_success = await self.op_handler(op)
+                            if commit_success:
+                                reply_msg = RemServerReply(msg.messageId, False, self._id, True, self.serverConfig)
+                                #cancel current heartbeats to exclude removed server
+                                for t in self._heartbeat_timer:
+                                    t.cancel()
+                                # then send out hearbeats immediately and indefinitely
+                                for id in range(self._server_num):
+                                    if id != self._id and (id in self.serverConfig or (self.serverNewConfig is not None and id in self.serverNewConfig)):
+                                        self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
+                                # if I was removed, then become follower
+                                if msg.server == self._id:
+                                    await self.enter_follower_state()
                 if reply_msg is None: #not leader when replying
                     reply_msg = RemServerReply(msg.messageId, True, self.votedFor, False, None)
 
