@@ -13,15 +13,15 @@ from config import Config
 from connection import ClientConnection
 from messages import *
 
-DELAY = 0.2                   # client timeout delay (in seconds)
-CHOOSE_RANDOM_LEADER = True # flag telling client to randomly choose new leader
+DELAY = 0.2                     # client timeout delay (in seconds)
+CHOOSE_RANDOM_LEADER = True     # flag telling client to randomly choose new leader
 
 SEND_NEW = True         # flag telling client to send a new instruction
 SEND_SUCCESS = False    # flag telling client that last message was received by leader
 
 ADD_NEW = True      # flag telling client to add new servers
 ADD_SUCCESS = False # flag telling client that last requested servers were added
-ADD_DELAY = 100
+ADD_DELAY = 0.2
 
 ALL_SENT_MESSAGES = {}  # dictionary to store all sent messages, keyed by message ID
 
@@ -65,6 +65,8 @@ class Client:
     async def sendInstruction(self, instruction):
         global CHOOSE_RANDOM_LEADER
         global ALL_SENT_MESSAGES
+        if self.leader not in self.config.INIT_SERVER_CONFIG:
+            CHOOSE_RANDOM_LEADER = True
         if CHOOSE_RANDOM_LEADER:
             self.leader = random.choice(list(self.config.INIT_SERVER_CONFIG))
         CHOOSE_RANDOM_LEADER = True
@@ -97,6 +99,8 @@ class Client:
     async def sendAddServers(self, instruction):
         global CHOOSE_RANDOM_LEADER
         global ALL_SENT_MESSAGES
+        if self.leader not in self.config.INIT_SERVER_CONFIG:
+            CHOOSE_RANDOM_LEADER = True
         if CHOOSE_RANDOM_LEADER:
             self.leader = random.choice(list(self.config.INIT_SERVER_CONFIG))
         CHOOSE_RANDOM_LEADER = True
@@ -164,6 +168,12 @@ class Client:
                     new_servers = new_servers + [int(input[i])]                    
                 msg = AddServers(set(new_servers))
                 self.addQ.put(msg)
+            elif input[0] == "rem":
+                if len(input) != 2:
+                    print("bad instruction")
+                else:
+                    msg = RemServer(int(input[1]))
+                    self.addQ.put(msg)
             else: print("bad instruction")
 
     async def server_handler(self):
@@ -191,6 +201,14 @@ class Client:
                     print("servers successfully added") #debug
                     self.config.INIT_SERVER_CONFIG = self.config.INIT_SERVER_CONFIG.union(sent_message.servers)
                     print("new config:", self.config.INIT_SERVER_CONFIG)
+                    ADD_SUCCESS = True 
+            if isinstance(msg, RemServerReply) and msg.messageId == self.addmsgId and not msg.notleader:
+                if msg.success:
+                    print("server successfully removed") #debug
+                    self.config.INIT_SERVER_CONFIG = msg.servers
+                    print("new config:", self.config.INIT_SERVER_CONFIG)
+                    if self.leader not in self.config.INIT_SERVER_CONFIG:
+                        self.leader = random.choice(list(self.config.INIT_SERVER_CONFIG))
                     ADD_SUCCESS = True 
             if (msg.messageId == self.msgId or msg.messageId == self.addmsgId) and msg.notleader and (not SEND_SUCCESS or not ADD_SUCCESS):
                 if msg.leaderId is None:

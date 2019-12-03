@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from log import LogItem
     from server import Server
 
-__all__ = ["Message", "Test", "AppendEntry", "RequestVote", "AppendEntryReply", "RequestVoteReply", "Get", "Put", "AddServers", "GetReply", "PutReply", "AddServersReply"]
+__all__ = ["Message", "Test", "AppendEntry", "RequestVote", "AppendEntryReply", "RequestVoteReply", "Get", "Put", "AddServers", "RemServer", "GetReply", "PutReply", "AddServersReply", "RemServerReply"]
 
 def messageId_generator_fun() -> Generator[int, None, None]:
     id = 0
@@ -103,6 +103,14 @@ class AddServers(Message):
     async def handle(self, server: "Server") -> None:
         await server.add_servers_handler(self)
 
+class RemServer(Message):
+    __slots__ = ["server"]
+    def __init__(self, server: int) -> None:
+        super().__init__()
+        self.server = server
+    async def handle(self, server: "Server") -> None:
+        await server.rem_server_handler(self)
+
 class GetReply(Message):
     __slots__ = ["notleader", "leaderId", "success", "value"]
     def __init__(self, messageId: int, notleader: bool, leaderId: Optional[int], success: bool, value: Optional[int]) -> None:
@@ -125,6 +133,17 @@ class PutReply(Message):
         client.put_reply_handler(self)
 
 class AddServersReply(Message):
+    __slots__ = ["notleader", "leaderId", "success", "servers"]
+    def __init__(self, messageId: int, notleader: bool, leaderId: Optional[int], success: bool, servers: Set[int]) -> None:
+        self.messageId = messageId
+        self.notleader = notleader
+        self.leaderId = leaderId
+        self.success = success
+        self.servers = servers
+    async def handle(self, client) -> None:
+        pass
+
+class RemServerReply(Message):
     __slots__ = ["notleader", "leaderId", "success", "servers"]
     def __init__(self, messageId: int, notleader: bool, leaderId: Optional[int], success: bool, servers: Set[int]) -> None:
         self.messageId = messageId

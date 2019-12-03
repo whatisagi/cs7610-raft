@@ -9,8 +9,10 @@ from typing import Optional, List, Dict, Tuple, Set
 
 from config import Config
 from connection import ServerConnection
-from messages import Message, Test, AppendEntry, RequestVote, AppendEntryReply, RequestVoteReply, Get, Put, AddServers, GetReply, PutReply, AddServersReply
+from messages import Message, Test, AppendEntry, RequestVote, AppendEntryReply, RequestVoteReply, Get, Put, AddServers, GetReply, PutReply, AddServersReply, RemServer, RemServerReply
 from log import LogItem, GetOp, PutOp, NoOp, ConfigOp
+
+LEADER_ALIVE = True #change
 
 __all__ = ["Server"]
 
@@ -111,6 +113,7 @@ class Server:
 
     async def request_vote_handler(self, msg: RequestVote) -> None:
         voteGranted = False
+        print("received request vote and leader not alive") #change
         if msg.term >= self.currentTerm:
             if self.votedFor is None or self.votedFor == msg.candidateId:
                 if msg.lastLogTerm > self.log[-1].term or ( msg.lastLogTerm == self.log[-1].term and msg.lastLogIndex >= len(self.log)-1):
@@ -142,7 +145,8 @@ class Server:
     async def append_entry_handler(self, msg: AppendEntry) -> None:
         success = False
         to_print_log = False
-        if msg.term >= self.currentTerm:
+        
+        if msg.term >= self.currentTerm:  
             # become follower if in candidate state
             if self.state == State.candidate:
                 self.votedFor = msg.leaderId
@@ -150,6 +154,8 @@ class Server:
 
             if msg.entry is None:
                 # dealing with heartbeat
+                global LEADER_ALIVE #change
+                LEADER_ALIVE = True
                 self.reset_election_timer()
                 if Config.VERBOSE:
                     print("S{}: Received heartbeat from S{} for term {}".format(self._id, msg.leaderId, msg.term))
@@ -250,35 +256,67 @@ class Server:
     async def add_servers_handler(self, msg: AddServers) -> None:
         await self._add_servers_queue.put(msg)
 
+    # david's function to remove servers
+    async def rem_server_handler(self, msg:RemServer) -> None:
+        await self._add_servers_queue.put(msg)        
+
     # methods for membership changes
     async def admin_handler(self) -> None:
         while True:
             msg = await self._add_servers_queue.get()
             reply_msg = None
-            if self.state == State.leader:
-                if all(new_server in self.serverConfig for new_server in msg.servers):
-                    reply_msg = AddServersReply(msg.messageId, False, self._id, True, self.serverConfig)
-                else:
-                    await asyncio.sleep(Config.SLEEP_BEFORE_JOINT_CONSENSUE)
-                    new_config = self.serverConfig.union(msg.servers)
-                    for id in range(self._server_num):
-                        if id != self._id and id in new_config and id not in self.serverConfig and (self.serverNewConfig is None or id not in self.serverNewConfig):
-                            self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
-                    op = ConfigOp(self.currentTerm, self.serverConfig, new_config)
-                    print("Server {}: Starting joint consensus {}".format(self._id, op))
-                    commit_success = await self.op_handler(op)
-                    if commit_success:
-                        print("Server {}: Joint consensus committed".format(self._id))
-                        await asyncio.sleep(Config.SLEEP_BETWEEN_JOINT_CONSENSUS)
-                        if self.state == State.leader:
-                            op = ConfigOp(self.currentTerm, new_config)
-                            print("Server {}: Starting new configuration: {}".format(self._id, op))
-                            commit_success = await self.op_handler(op)
-                            if commit_success:
-                                print("Server {}: New configuration committed".format(self._id))
-                                reply_msg = AddServersReply(msg.messageId, False, self._id, True, self.serverConfig)
-            if reply_msg is None:
-                reply_msg = AddServersReply(msg.messageId, True, self.votedFor, False, self.serverConfig)
+            if isinstance(msg, AddServers):
+                if self.state == State.leader:
+                    if all(new_server in self.serverConfig for new_server in msg.servers):
+                        reply_msg = AddServersReply(msg.messageId, False, self._id, True, self.serverConfig)
+                    else:
+                        await asyncio.sleep(Config.SLEEP_BEFORE_JOINT_CONSENSUE)
+                        new_config = self.serverConfig.union(msg.servers)
+                        for id in range(self._server_num):
+                            if id != self._id and id in new_config and id not in self.serverConfig and (self.serverNewConfig is None or id not in self.serverNewConfig):
+                                self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
+                        op = ConfigOp(self.currentTerm, self.serverConfig, new_config)
+                        print("Server {}: Starting joint consensus {}".format(self._id, op))
+                        commit_success = await self.op_handler(op)
+                        if commit_success:
+                            print("Server {}: Joint consensus committed".format(self._id))
+                            await asyncio.sleep(Config.SLEEP_BETWEEN_JOINT_CONSENSUS)
+                            if self.state == State.leader:
+                                op = ConfigOp(self.currentTerm, new_config)
+                                print("Server {}: Starting new configuration: {}".format(self._id, op))
+                                commit_success = await self.op_handler(op)
+                                if commit_success:
+                                    print("Server {}: New configuration committed".format(self._id))
+                                    reply_msg = AddServersReply(msg.messageId, False, self._id, True, self.serverConfig)
+                if reply_msg is None:
+                    reply_msg = AddServersReply(msg.messageId, True, self.votedFor, False, self.serverConfig)
+            
+            if isinstance(msg, RemServer):
+                if self.state == State.leader:
+                    if msg.server not in self.serverConfig:
+                        reply_msg = RemServerReply(msg.messageId, False, self._id, True, self.serverConfig)
+                    else:
+                        new_config = self.serverConfig
+                        new_config.remove(msg.server)
+                        op = ConfigOp(self.currentTerm, new_config)
+                        if Config.VERBOSE:
+                            print("S{}: Received {} from client".format(self._id, op))
+                        commit_success = await self.op_handler(op)
+                        if commit_success:
+                            reply_msg = RemServerReply(msg.messageId, False, self._id, True, self.serverConfig)
+                            #cancel current heartbeats to exclude removed server
+                            for t in self._heartbeat_timer:
+                                t.cancel()
+                            # then send out hearbeats immediately and indefinitely
+                            for id in range(self._server_num):
+                                if id != self._id and (id in self.serverConfig or (self.serverNewConfig is not None and id in self.serverNewConfig)):
+                                    self._heartbeat_timer.append(self._loop.create_task(self.heartbeat_sender(id)))
+                            # if I was removed, then become follower
+                            if msg.server == self._id:
+                                await self.enter_follower_state()
+                if reply_msg is None: #not leader when replying
+                    reply_msg = RemServerReply(msg.messageId, True, self.votedFor, False, None)
+
             await self._conn.send_message_to_client(reply_msg, 0)
 
     def update_config(self) -> None:
@@ -343,12 +381,15 @@ class Server:
         self._message_resend_timer = {}
 
     async def enter_follower_state(self) -> None:
+        #global LEADER_ALIVE #change
+        #LEADER_ALIVE = True #change
         await self.exit_current_state()
         self.state = State.follower
         self.reset_election_timer()
         print("Server {}: follower of term {}".format(self._id, self.currentTerm))
 
     async def enter_candidate_state(self) -> None:
+        print("I've become a candidate") #change
         await self.exit_current_state()
         self.state = State.candidate
         self._voted_for_me = set()
@@ -363,6 +404,8 @@ class Server:
                 await self.message_sender(msg, id)
 
     async def enter_leader_state(self) -> None:
+        global LEADER_ALIVE #change
+        LEADER_ALIVE = True #change
         await self.exit_current_state()
         self.state = State.leader
         self.cancel_election_timer()
@@ -380,7 +423,11 @@ class Server:
         try:
             timeout = random.uniform(Config.ELECTION_TIMEOUT, 2 * Config.ELECTION_TIMEOUT)
             await asyncio.sleep(timeout)
-            await self.enter_candidate_state()
+            global LEADER_ALIVE #change
+            LEADER_ALIVE = False #change
+            print("setting LEADER_ALIVE to False") #change
+            if self._id in self.serverConfig: # stops leaders that have stepped down from reasserting 
+                await self.enter_candidate_state()
         except asyncio.CancelledError:
             pass
 
@@ -399,16 +446,25 @@ class Server:
             # if msg.term == 1:
             #     continue
             # update term immediately
-            if msg.term > self.currentTerm:
-                self.currentTerm = msg.term
-                self.votedFor = None
-                await self.enter_follower_state()
-            await msg.handle(self)
+            global LEADER_ALIVE #change
+            if isinstance(msg, RequestVote) and LEADER_ALIVE: #change
+                #print("ignoring message to vote for ", msg.candidateId) #change
+                pass
+            else:
+                if isinstance(msg, RequestVote): #change
+                    print("got a safe message to vote for", msg.candidateId)
+                    if LEADER_ALIVE:
+                        print("and leader is alive")
+                if msg.term > self.currentTerm:
+                    self.currentTerm = msg.term
+                    self.votedFor = None
+                    await self.enter_follower_state()
+                await msg.handle(self) #do not change
 
     async def client_handler(self):
         while True:
             msg = await self._conn.receive_message_from_client()
-            await msg.handle(self)
+            await msg.handle(self) #do not change
 
     def run(self):
         try:
