@@ -12,8 +12,6 @@ from connection import ServerConnection
 from messages import Message, Test, AppendEntry, RequestVote, AppendEntryReply, RequestVoteReply, Get, Put, AddServers, GetReply, PutReply, AddServersReply, RemServer, RemServerReply
 from log import LogItem, GetOp, PutOp, NoOp, ConfigOp
 
-LEADER_ALIVE = True #change
-
 __all__ = ["Server"]
 
 class Storage:
@@ -47,7 +45,7 @@ class State(enum.Enum):
 
 class Server:
     __slots__ = ["_recovery", "_conn", "_id", "_server_num", "_loop", "_storage", "_voted_for_me", "_message_sent", "_message_resend_timer", "_election_timer", "_heartbeat_timer", "_apply_notifier", "_add_servers_queue",
-        "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex", "state", "stateMachine", "serverConfig", "serverNewConfig"]
+        "currentTerm", "votedFor", "log", "commitIndex", "lastApplied", "nextIndex", "matchIndex", "state", "stateMachine", "serverConfig", "serverNewConfig", "leader_alive"]
 
     # methods for initialization
     def __init__(self, config: Config=Config, storage: Storage=Storage(), recovery: bool=False) -> None:
@@ -75,6 +73,7 @@ class Server:
         self.nextIndex: List[int] = [len(self.log) for i in range(self._server_num)]
         self.matchIndex: List[int] = [0 for i in range(self._server_num)]
         self.stateMachine: Dict[str, int] = {}
+        self.leader_alive = True
         if self.currentTerm == 0 and self._id == 0:
             await self.enter_leader_state()
         else:
@@ -113,14 +112,14 @@ class Server:
 
     async def request_vote_handler(self, msg: RequestVote) -> None:
         voteGranted = False
-        print("received request vote and leader not alive") #change
-        if msg.term >= self.currentTerm:
+        if (msg.term > self.currentTerm and not self.leader_alive) or msg.term == self.currentTerm:
             if self.votedFor is None or self.votedFor == msg.candidateId:
                 if msg.lastLogTerm > self.log[-1].term or ( msg.lastLogTerm == self.log[-1].term and msg.lastLogIndex >= len(self.log)-1):
+                    self.reset_election_timer()
+                    self.votedFor = msg.candidateId
                     voteGranted = True
                     self.currentTerm = msg.term
-                    self.votedFor = msg.candidateId
-                    self.reset_election_timer()
+
         
         if Config.VERBOSE and msg.term >= self.currentTerm:
             print("S{}: Received RequestVote from S{} for term {} with ({},{}), {}grant".format(self._id, msg.candidateId, msg.term, msg.lastLogTerm, msg.lastLogIndex, "" if voteGranted else "not "))
@@ -154,8 +153,6 @@ class Server:
 
             if msg.entry is None:
                 # dealing with heartbeat
-                global LEADER_ALIVE #change
-                LEADER_ALIVE = True
                 self.reset_election_timer()
                 if Config.VERBOSE:
                     print("S{}: Received heartbeat from S{} for term {}".format(self._id, msg.leaderId, msg.term))
@@ -386,8 +383,6 @@ class Server:
         self._message_resend_timer = {}
 
     async def enter_follower_state(self) -> None:
-        #global LEADER_ALIVE #change
-        #LEADER_ALIVE = True #change
         await self.exit_current_state()
         self.state = State.follower
         self.reset_election_timer()
@@ -409,8 +404,6 @@ class Server:
                 await self.message_sender(msg, id)
 
     async def enter_leader_state(self) -> None:
-        global LEADER_ALIVE #change
-        LEADER_ALIVE = True #change
         await self.exit_current_state()
         self.state = State.leader
         self.cancel_election_timer()
@@ -427,22 +420,24 @@ class Server:
     async def election_timeout(self) -> None:
         try:
             timeout = random.uniform(Config.ELECTION_TIMEOUT, 2 * Config.ELECTION_TIMEOUT)
-            await asyncio.sleep(timeout)
-            global LEADER_ALIVE #change
-            LEADER_ALIVE = False #change
-            print("setting LEADER_ALIVE to False") #change
+            await asyncio.sleep(Config.ELECTION_TIMEOUT)
+            self.leader_alive = False
+            await asyncio.sleep(timeout - Config.ELECTION_TIMEOUT)
             if self._id in self.serverConfig: # stops leaders that have stepped down from reasserting 
                 await self.enter_candidate_state()
         except asyncio.CancelledError:
             pass
 
     def cancel_election_timer(self, timeouted: bool=False) -> None:
+        self.leader_alive = True
         if self._election_timer is not None and not timeouted:
             self._election_timer.cancel()
 
     def reset_election_timer(self, timeouted: bool=False) -> None:
+        self.leader_alive = True
         self.cancel_election_timer(timeouted)
         self._election_timer = self._loop.create_task(self.election_timeout())
+
 
     # main methods for interacting with servers and client
     async def server_handler(self):
@@ -451,25 +446,19 @@ class Server:
             # if msg.term == 1:
             #     continue
             # update term immediately
-            global LEADER_ALIVE #change
-            if isinstance(msg, RequestVote) and LEADER_ALIVE: #change
-                #print("ignoring message to vote for ", msg.candidateId) #change
-                pass
-            else:
-                if isinstance(msg, RequestVote): #change
-                    print("got a safe message to vote for", msg.candidateId)
-                    if LEADER_ALIVE:
-                        print("and leader is alive")
-                if msg.term > self.currentTerm:
+            if msg.term > self.currentTerm:
+                if not isinstance(msg, RequestVote) or not self.leader_alive: 
                     self.currentTerm = msg.term
                     self.votedFor = None
                     await self.enter_follower_state()
-                await msg.handle(self) #do not change
+            await msg.handle(self) 
+
 
     async def client_handler(self):
         while True:
             msg = await self._conn.receive_message_from_client()
             await msg.handle(self) #do not change
+                       
 
     def run(self):
         try:
