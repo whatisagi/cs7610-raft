@@ -37,7 +37,7 @@ class Resolver:
 
 class Connection:
     """
-    ContextManager class for asynchronous connectless UDP "connection"
+    ContextManager class for asynchronous connectless UDP communication
     Inspired by aio_echo.py of bashkirtsevich:
     (https://gist.github.com/bashkirtsevich/1659c18ac6d05d688426e5f150c9f6fc)
     """
