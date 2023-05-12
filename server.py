@@ -73,14 +73,14 @@ class Server:
         ]
 
     # methods for initialization
-    def __init__(self, config: Config=Config, storage: Storage=Storage(), recovery: bool=False) -> None:
+    def __init__(self, config: Config=Config(), storage: Storage=Storage(), recovery: bool=False) -> None:
         self._recovery = recovery
         self._conn = ServerConnection(config)
         self._id: int = self._conn.server_id
         self._server_num = len(config.SERVER_NAMES)
         self._loop = asyncio.get_event_loop()
         self._storage = storage
-        self._voted_for_me: Set[int] = {}
+        self._voted_for_me: Set[int] = set()
         self._message_sent: Dict[int, Message] = {}
         self._message_resend_timer: Dict[int, asyncio.Task] = {}
         self._election_timer: Optional[asyncio.Task] = None
